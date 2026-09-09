@@ -2,9 +2,11 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
+import { execFileSync } from 'node:child_process';
 import { tmpRepo, harness, hook, userTyped, setMode, challengerDispatched, writeIssue, ISSUE, writeManifest, MANIFEST, addWorktree } from './helpers.mjs';
 
 const W = (cwd, file, extra = {}) => hook('gate', { cwd, tool_name: 'Write', tool_input: { file_path: file, content: 'x' }, tool_use_id: 't1', ...extra }, cwd);
+const git = (cwd, ...a) => execFileSync('git', a, { cwd, stdio: 'pipe' });
 const B = (cwd, command, extra = {}) => hook('gate', { cwd, tool_name: 'Bash', tool_input: { command }, tool_use_id: extra.tool_use_id || 'b1', ...extra }, cwd);
 
 test('inert without .harness', () => {
@@ -68,6 +70,21 @@ test('grill Bash that changes source is a recorded violation and blocks mode cha
   userTyped(r, '/carve');
   const m = harness(r, 'mode', 'plan');
   assert.equal(m.code, 1); assert.match(m.err, /violations/);
+  // SPEC §3: reverting the file clears it
+  git(r, 'checkout', '--', 'src/app/main.ts');
+  assert.equal(harness(r, 'mode', 'plan').code, 0);
+});
+
+test('a violation is cleared by reverting the content, never by committing it', () => {
+  const r = tmpRepo(); harness(r, 'init');
+  B(r, 'echo hacked > src/app/main.ts');
+  fs.writeFileSync(path.join(r, 'src/app/main.ts'), 'hacked');
+  assert.equal(hook('post', { cwd: r, tool_name: 'Bash', tool_input: { command: 'echo' }, tool_use_id: 'b1' }, r).code, 2);
+  git(r, 'add', '-A'); git(r, 'commit', '-qm', 'launder');           // tree is clean now, but the change landed
+  userTyped(r, '/carve');
+  const m = harness(r, 'mode', 'plan'); assert.equal(m.code, 1); assert.match(m.err, /violations/);
+  git(r, 'checkout', 'HEAD~1', '--', 'src/app/main.ts'); git(r, 'commit', '-qam', 'undo'); // content back → cleared
+  assert.equal(harness(r, 'mode', 'plan').code, 0);
 });
 
 test('plan mode: ARCHITECTURE.md and .work allowed, source denied; invalid manifest reported after write', () => {

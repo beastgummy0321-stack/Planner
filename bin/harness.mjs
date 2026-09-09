@@ -8,7 +8,7 @@ import {
   readLease, writeLease, listLeases, leasePath, tryGit, git, norm, worktreeRoot, isInside, parseFrontmatter, planHash,
 } from '../lib/core.mjs';
 import { readManifest, validateIssueFile, validateIssueText, validateTicketFile } from '../lib/validate.mjs';
-import { issueFingerprint } from '../lib/core.mjs';
+import { issueFingerprint, pruneViolations } from '../lib/core.mjs';
 import { statusText, queue } from '../lib/status.mjs';
 import { planAdapter, applyAdapter, runChecker, proveChecker, setupEnv, detectStack } from '../lib/adapters.mjs';
 import * as Q from '../lib/queue.mjs';
@@ -74,12 +74,12 @@ async function init() {
   out(`initialised ${root}: mode grill. Type /dig to start.`);
 }
 
-async function status() { out(statusText(project())); }
+async function status() { const p = project(); pruneViolations(p, readState(p)); out(statusText(p)); }
 
 async function mode(next) {
   const p = project();
   if (!MODES.includes(next)) die(`mode must be one of ${MODES.join(', ')}`);
-  const state = readState(p);
+  const state = pruneViolations(p, readState(p));
   const last = readJson(path.join(p.harness, 'runtime', 'last-prompt.json'), null);
   const skill = { grill: 'dig', plan: 'carve', work: 'crank' }[next];
   const re = new RegExp(`^\\s*/(harness:)?${skill}(\\s|$)`, 'i'); // the prompt IS the command; "先不要 /carve" is not

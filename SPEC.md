@@ -310,6 +310,7 @@ lines and has a red-then-green scenario in `test/stress.test.mjs`.
 | an existing `check:architecture` is overwritten | composed: ours lands as `check:architecture:harness`, the checker runs both | `planTs` (28) |
 | Yarn Classic gets Berry's `--immutable`; no-lockfile installs pass silently | `.yarnrc.yml` decides; a non-reproducible install is named in the env log | `envCommands` (29) |
 | the reuse scan cannot leave the repo | utility has WebSearch/WebFetch; `find-skills` is a strategy, not a dependency | `agents/utility.md` |
+| "reverting the file clears it" was documented, never implemented: a main-tree violation lived forever, so a `git commit` in grill (status changes, content does not) locked /dig out | a violation records the file's pre-call hash and HEAD; `mode`/`status` drop it when the content is back (or the file is clean against an unchanged HEAD blob). Committing the change is not a revert (1.3.1) | `core.pruneViolations`, `post.mjs` (30) |
 
 Deliberately not done: user approval as a hook receipt (the `/crank` prompt is
 the user's act; `deps_approved` + git log are the audit trail — restructuring

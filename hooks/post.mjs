@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {
   findProject, readState, writeState, readLease, writeLease, findLeaseByCwd, findLeaseByAgent,
-  rel, matchesAny, norm, snapshot, changedBetween, readJson, readStdinJson, writeJsonAtomic,
+  rel, matchesAny, norm, snapshot, changedBetween, readJson, readStdinJson, writeJsonAtomic, gitHead,
 } from '../lib/core.mjs';
 import { validateManifestFile, validateIssueFile, validateTicketFile } from '../lib/validate.mjs';
 
@@ -60,7 +60,8 @@ function afterBash() {
   }
   if (!problems.length) return;
   if (!lease) {
-    state.violations = [...(state.violations || []), ...mainBad.map((f) => ({ file: f, tool_use_id: id, mode: state.mode, command: input.tool_input?.command }))];
+    const head = gitHead(project.root);
+    state.violations = [...(state.violations || []), ...mainBad.map((f) => ({ file: f, tool_use_id: id, mode: state.mode, command: input.tool_input?.command, before: base.trees.main[f] ?? null, head }))];
     writeState(project, state);
   }
   fail(`harness: Bash changed files outside the allowlist:\n  ${problems.join('\n  ')}\n` +
