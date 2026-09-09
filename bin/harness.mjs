@@ -17,6 +17,12 @@ const [cmd, ...args] = process.argv.slice(2);
 const cwd = process.cwd();
 
 const commands = { init, status, mode, validate, claim, attach, release, adapter, env, queue: queueCmd, finish, review, merge, block, diff, integrate, close, 'plan-sync': planSync, help };
+// metrics: one line per CLI call in .harness/runtime/metrics.jsonl (gitignored, never injected into any context) —
+// the only way to see where wall time goes before deciding what else to make conditional
+const t0 = Date.now();
+process.on('exit', (code) => {
+  try { const p = findProject(cwd); if (p && cmd !== 'help') { fs.mkdirSync(path.join(p.harness, 'runtime'), { recursive: true }); fs.appendFileSync(path.join(p.harness, 'runtime', 'metrics.jsonl'), JSON.stringify({ cmd, arg: args[0] || null, ms: Date.now() - t0, ok: code === 0, ts: t0 }) + '\n'); } } catch {}
+});
 try {
   await (commands[cmd] || help)(...args);
 } catch (e) {
@@ -45,7 +51,7 @@ async function help() {
   review <id> approve  (planner agent only) record the review receipt for the current worktree head
   merge <id>           merge the issue branch into base, integration gate, smoke in the worktree, → done/
   block <id> "<reason>"     doing/ → blocked/ with reason; worktree discarded
-  diff <id>            diff of the issue branch against its base
+  diff <id> [--stat]   diff of the issue branch against its base (reviewers: --stat first, then read the files)
   integrate ticket <F01-T01> | feature <F01>
   close ticket <F01-T01> | feature <F01>     after the planner/user accepted the integration
   plan-sync            regenerate .work/PLAN.md from ticket files`);
@@ -207,9 +213,16 @@ async function attach(id) {
   lease.attached_at = Date.now();
   writeLease(p, lease);
   const issue = fs.readFileSync(issueFile(p, 'doing', id), 'utf8');
+  // the worker's context pack: the issue plus the contract of the modules its touch globs reach — not the ARCHITECTURE prose
+  const { manifest } = readManifest(p.root);
+  const prefix = (g) => g.split(/[*?[{]/)[0];
+  const slice = Object.entries(manifest?.modules || {})
+    .filter(([, m]) => (lease.touch || []).some((g) => prefix(g).startsWith(m.root) || m.root.startsWith(prefix(g))))
+    .map(([n, m]) => `  ${n}: root ${m.root} · public ${m.public} · may_depend_on [${(m.may_depend_on || []).join(', ')}] · owns ${JSON.stringify(m.owns)}`);
   out(`attached ${id} to ${lease.worktree} (branch ${lease.branch}, base ${lease.base_sha.slice(0, 8)})\n` +
       `environment: lazy (dependencies install once, before the first runtime command)\n` +
-      `touch: ${JSON.stringify(lease.touch)}\nallowed Bash (exact): ${JSON.stringify(lease.allowed_commands)}\n\n${issue}`);
+      `touch: ${JSON.stringify(lease.touch)}\nallowed Bash (exact): ${JSON.stringify(lease.allowed_commands)}\n` +
+      `modules touched (other modules only through their public entry):\n${slice.join('\n') || '  (none declared — app_shell or legacy)'}\n\n${issue}`);
 }
 
 async function release(id) {
@@ -292,7 +305,7 @@ async function block(id, ...reason) {
   if (!Q.findIssue(p, id)) die(`no issue ${id}`);
   out(JSON.stringify(Q.blockIssue(p, id, reason.join(' ') || 'blocked by orchestrator'), null, 2));
 }
-async function diff(id) { out(Q.diff(project(), id || die('diff <id>'))); }
+async function diff(id, flag) { out(Q.diff(project(), id || die('diff <id> [--stat]'), flag === '--stat')); }
 async function integrate(kind, id) {
   const p = project();
   const r = kind === 'ticket' ? Q.integrateTicket(p, id) : kind === 'feature' ? Q.integrateFeature(p, id) : die('integrate ticket <id> | feature <id>');

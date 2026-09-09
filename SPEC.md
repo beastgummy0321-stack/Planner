@@ -317,6 +317,23 @@ carve→crank for it is not worth it yet); base HEAD in the retry fingerprint
 (would void every block on any merge); a TypeScript/Python AST ownership
 analyzer; an "environment contract" gate.
 
+## 15. Fourth round (2026-09-10): pay for assurance only where it can catch something (v1.3.0)
+
+An external efficiency handoff (17 proposals) was ablated against the code: kept only what changes a real call
+path. Containment stays unconditional; assurance became conditional on machine facts, never on a model's opinion.
+
+| fixed cost removed | mechanism now | machine part |
+|---|---|---|
+| frozen install on every attach | lazy env: `ensureEnv` runs once, before the first command that needs a runtime (gate, finish, merge); `lease.env_ready` | `adapters.needsRuntime/ensureEnv` (37, 38) |
+| typecheck/build/checker/smoke on a `.md` change | docs-only diff (`.md .txt` images) skips the import checker, typecheck, build at finish and the integration checker + smoke at merge; scope and issue verify always run | `queue.docsOnly` (39) |
+| challenger on every /carve | machine floor: demanded when ARCHITECTURE.md hash ≠ `state.arch_hash` (or first plan), any open issue has `review: planner`, or >1 open ticket; below it work opens without one | `harness mode work` (40) |
+| adapter apply + prove + approval per feature | `planAdapter.unchanged` by byte-compare of generated files, script and checker command → `adapter check` only | `adapters.isApplied` (41) |
+| worker reads ARCHITECTURE prose; reviewer eats the whole diff | attach prints the touched modules' contract; `diff --stat`; planner reads files itself | `attach`, `diff` (42) |
+| no data on where time goes | `.harness/runtime/metrics.jsonl`: one line per CLI call (ms, ok) and per agent dispatch; never injected | `bin/harness.mjs`, `gate.gateAgent` |
+
+Deliberately not done (revisit only with metrics): a `needs_*` derived-requirements object, a `next-action`
+state machine for /crank, a checker result cache, a reuse-scan cache, per-project model mapping, a replay benchmark.
+
 ## 12. Implementation order (dependency order, not phases)
 
 1. Plugin shell ✓ 2. state + hooks foundation (deny proven, plugin loads via

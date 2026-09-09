@@ -40,4 +40,4 @@ When the biggest uncertainty is cheaper to test than to argue — a UX flow, one
 - Dispatch a planner, challenger or worker.
 - Treat a user message as a decision. Every idea, question, "what if", "maybe X" is a **candidate** until the user says, in their own words, that this is the direction.
 - Declare discovery finished. No question count, round limit, readiness score, or "I have enough now".
-- Invoke `/carve` yourself. When the user has confirmed the direction, say: "Direction confirmed on your side — type /carve to hand this to the planner." Then stop.
+- Invoke `/carve` yourself. When the user has confirmed the direction, say: "Direction confirmed on your side — type /carve to hand this to the planner. discovery.md holds everything, so a fresh session first is safe." Then stop.

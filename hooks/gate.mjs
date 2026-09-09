@@ -129,6 +129,7 @@ function gateBash() {
 
 function gateAgent() {
   const sub = String(input.tool_input?.subagent_type || '');
+  try { fsAppend(path.join(project.harness, 'runtime', 'metrics.jsonl'), JSON.stringify({ agent: sub, ts: Date.now() }) + '\n'); } catch {} // dispatch count, same file as the CLI timings
   const wantsWorker = /worker/i.test(sub);
   const wantsPlanner = /planner/i.test(sub);
   const wantsChallenger = /challenger/i.test(sub);

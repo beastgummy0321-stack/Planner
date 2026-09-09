@@ -151,6 +151,9 @@ function lifecycle(r) {
   g(r, 'worktree', 'add', '-q', '-b', 'worktree-agent-1', wt);
   const at = harness(wt, 'attach', 'F01-T01-I01');
   assert.equal(at.code, 0, at.err); assert.match(at.out, /environment: lazy/);
+  // scenario 42: the worker's context pack names the module contract it works inside, not the ARCHITECTURE prose
+  assert.match(at.out, /identity: root src\/modules\/identity · public src\/modules\/identity\/index\.ts/);
+  assert.doesNotMatch(at.out, /billing: root/);
   const agent = { agent_id: 'a1', agent_type: 'harness:worker' };
   assert.equal(W(wt, 'src/modules/identity/read.ts', agent).denied, false);
   fs.writeFileSync(path.join(wt, 'src/modules/identity/read.ts'), 'export const read = () => 1;\n');
@@ -159,6 +162,9 @@ function lifecycle(r) {
   assert.equal(fin.code, 0, fin.out + fin.err);
   const res = JSON.parse(fin.out);
   assert.equal(res.ok, true); assert.equal(res.review, 'none');
+  // scenario 42: pointer-first review material and the metrics line every CLI call leaves behind
+  assert.match(harness(r, 'diff', 'F01-T01-I01', '--stat').out, /read\.ts \|/);
+  assert.ok(fs.readFileSync(path.join(r, '.harness/runtime/metrics.jsonl'), 'utf8').split('\n').some((l) => l.includes('"cmd":"finish"')));
   assert.equal(harness(r, 'merge', 'F01-T01-I01').code, 0);
   assert.ok(fs.existsSync(path.join(r, '.work/done/F01-T01-I01.md')));
   assert.ok(fs.existsSync(path.join(r, 'src/modules/identity/read.ts')));
