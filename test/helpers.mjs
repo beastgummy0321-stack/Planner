@@ -43,7 +43,7 @@ export function userTyped(cwd, prompt) {
 }
 
 export function setMode(cwd, m) {
-  userTyped(cwd, `/${m}`);
+  userTyped(cwd, `/${{ grill: 'dig', plan: 'carve', work: 'crank' }[m]}`);
   const r = harness(cwd, 'mode', m);
   if (r.code !== 0) throw new Error(r.err);
 }
