@@ -125,3 +125,23 @@ test('issue validation catches unsafe issues', () => {
   writeIssue(r, 'ready', ISSUE());
   assert.equal(hook('post', { cwd: r, tool_name: 'Write', tool_input: { file_path: f } }, r).code, 0);
 });
+
+test('scenario 9: a user idea in grill never reaches ARCHITECTURE.md; session hook reports state', () => {
+  const r = tmpRepo(); harness(r, 'init');
+  userTyped(r, 'maybe billing should own users after all, what do you think?');
+  const d = W(r, 'ARCHITECTURE.md');
+  assert.equal(d.denied, true); assert.match(d.reason, /No-Build/);
+  const s = hook('session', { cwd: r, session_start_reason: 'startup' }, r);
+  assert.match(s.out, /mode=grill/); assert.match(s.out, /Only the user ends \/grill/);
+});
+
+test('review: planner issues cannot be merged without --approved', () => {
+  const r = tmpRepo(); harness(r, 'init'); writeManifest(r); setMode(r, 'plan'); setMode(r, 'work');
+  writeIssue(r, 'ready', ISSUE({ interface_change: true, review: 'planner' }));
+  assert.equal(harness(r, 'claim', 'F01-T01-I01').code, 0);
+  const lease = JSON.parse(fs.readFileSync(path.join(r, '.harness/runtime/leases/F01-T01-I01.json')));
+  lease.finished = true; lease.head_sha = 'HEAD'; lease.worktree = r;
+  fs.writeFileSync(path.join(r, '.harness/runtime/leases/F01-T01-I01.json'), JSON.stringify(lease));
+  const m = harness(r, 'merge', 'F01-T01-I01');
+  assert.equal(m.code, 1); assert.match(m.err, /needs planner review/);
+});

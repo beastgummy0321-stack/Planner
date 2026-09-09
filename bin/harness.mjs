@@ -8,11 +8,13 @@ import {
 } from '../lib/core.mjs';
 import { readManifest, validateIssueFile, validateIssueText } from '../lib/validate.mjs';
 import { statusText, queue } from '../lib/status.mjs';
+import { planAdapter, applyAdapter, runChecker, proveChecker, setupEnv, detectStack } from '../lib/adapters.mjs';
+import * as Q from '../lib/queue.mjs';
 
 const [cmd, ...args] = process.argv.slice(2);
 const cwd = process.cwd();
 
-const commands = { init, status, mode, validate, claim, attach, release, help };
+const commands = { init, status, mode, validate, claim, attach, release, adapter, env, queue: queueCmd, finish, merge, block, diff, integrate, close, 'plan-sync': planSync, help };
 try {
   await (commands[cmd] || help)(...args);
 } catch (e) {
@@ -32,7 +34,17 @@ async function help() {
   validate             check ARCHITECTURE.md manifest and every .work issue file
   claim <id>           ready/ → doing/ atomically and create the lease
   attach <id>          (worker, inside its worktree) bind cwd/branch/base_sha to the lease
-  release <id>         doing/ → ready/, drop the lease (orchestrator only)`);
+  release <id>         doing/ → ready/, drop the lease (orchestrator only)
+  adapter plan|apply --approved|check|prove   container checker for the stack (ts, python)
+  env                  (worker, inside worktree) frozen dependency install
+  queue next           claimable issues (deps done, no overlap, dependency changes alone)
+  finish <id>          scope post-diff · checker · ownership · verify · typecheck/build → green or blocked/
+  merge <id> [--approved]   merge the issue branch into base, integration gate, → done/
+  block <id> "<reason>"     doing/ → blocked/ with reason; worktree discarded
+  diff <id>            diff of the issue branch against its base
+  integrate ticket <F01-T01> | feature <F01>
+  close ticket <F01-T01> | feature <F01>     after the planner/user accepted the integration
+  plan-sync            regenerate .work/PLAN.md from ticket files`);
 }
 
 async function init() {
@@ -45,7 +57,10 @@ async function init() {
   for (const d of ['tickets', ...QUEUE_DIRS]) fs.mkdirSync(path.join(root, '.work', d), { recursive: true });
   const gi = path.join(root, '.gitignore');
   const cur = fs.existsSync(gi) ? fs.readFileSync(gi, 'utf8') : '';
-  if (!/^\.harness\/?$/m.test(cur)) fs.writeFileSync(gi, cur + (cur && !cur.endsWith('\n') ? '\n' : '') + '.harness/\n');
+  let add = '';
+  if (!/^\.harness\/?$/m.test(cur)) add += '.harness/\n';
+  if (!/^\.claude\/worktrees\/?$/m.test(cur)) add += '.claude/worktrees/\n';
+  if (add) fs.writeFileSync(gi, cur + (cur && !cur.endsWith('\n') ? '\n' : '') + add);
   out(`initialised ${root}: mode grill. Type /grill to start.`);
 }
 
@@ -105,7 +120,7 @@ async function claim(id) {
   const { issue, errors } = validateIssueText(text);
   if (errors.length) die(`issue invalid:\n  ${errors.join('\n  ')}`);
   const q = queue(p.root);
-  const missing = (issue.after || []).filter((a) => !q.done.includes(a) && !isIntegrated(p, a));
+  const missing = (issue.after || []).filter((a) => !Q.isDone(p, a));
   if (missing.length) die(`dependencies not done: ${missing.join(', ')}`);
   for (const l of listLeases(p)) {
     if (overlap(l.touch, issue.touch)) die(`touch overlaps with active issue ${l.issue}; run sequentially`);
@@ -147,9 +162,13 @@ async function attach(id) {
   lease.base = tryGit(p.root, 'branch', '--show-current') || 'main';
   lease.attached_at = Date.now();
   writeLease(p, lease);
+  const { manifest } = readManifest(p.root);
+  const envr = setupEnv(top, manifest?.stack || detectStack(top));
   const issue = fs.readFileSync(issueFile(p, 'doing', id), 'utf8');
   out(`attached ${id} to ${lease.worktree} (branch ${lease.branch}, base ${lease.base_sha.slice(0, 8)})\n` +
+      `environment: ${envr.ok ? 'ready' : 'FAILED'} ${JSON.stringify(envr.log)}\n` +
       `touch: ${JSON.stringify(lease.touch)}\nallowed Bash (exact): ${JSON.stringify(lease.allowed_commands)}\n\n${issue}`);
+  if (!envr.ok) process.exit(1);
 }
 
 async function release(id) {
@@ -160,3 +179,78 @@ async function release(id) {
   try { fs.unlinkSync(leasePath(p, id)); } catch {}
   out(`released ${id}: doing/ → ready/`);
 }
+
+async function adapter(sub, flag) {
+  const p = project();
+  if (sub === 'plan') {
+    const plan = planAdapter(p.root);
+    out(`stack: ${plan.stack}
+install: ${plan.install.length ? plan.install.join('; ') : '(nothing)'}
+add: ${plan.add.join(', ')}
+modify: ${plan.modify.join(', ')}
+checker command: ${plan.checker}${plan.reuse ? '\nreuse: ' + plan.reuse : ''}
+
+Ask the user to approve this once, then run: harness adapter apply --approved`);
+  } else if (sub === 'apply') {
+    if (flag !== '--approved') die('apply needs --approved: show `harness adapter plan` to the user first');
+    if (readState(p).mode !== 'plan') die('adapter apply only in plan mode');
+    const plan = applyAdapter(p);
+    out(`applied: ${plan.add.join(', ')}; checker = ${plan.checker}`);
+    const r = runChecker(p.root);
+    out(r.ok ? 'checker: green' : `checker: RED
+${r.output}`);
+    if (!r.ok) process.exit(1);
+  } else if (sub === 'check') {
+    const r = runChecker(p.root);
+    out(r.ok ? `green (${r.command})` : r.output);
+    if (!r.ok) process.exit(1);
+  } else if (sub === 'prove') {
+    const r = proveChecker(p.root);
+    out(JSON.stringify(r, null, 2));
+    if (!r.ok) process.exit(1);
+  } else die('adapter plan|apply --approved|check|prove');
+}
+async function env() {
+  const p = project();
+  const top = worktreeRoot(cwd) || die('not in a git tree');
+  const { manifest } = readManifest(p.root);
+  const r = setupEnv(top, manifest?.stack || detectStack(top));
+  out(JSON.stringify(r, null, 2));
+  if (!r.ok) process.exit(1);
+}
+async function queueCmd(sub) {
+  const p = project();
+  if (sub !== 'next') die('queue next');
+  const r = Q.next(p);
+  out(JSON.stringify(r, null, 2));
+}
+async function finish(id) {
+  const p = project(); id || die('finish <id>');
+  const r = Q.finish(p, id);
+  out(JSON.stringify(r, null, 2));
+  if (!r.ok) process.exit(1);
+}
+async function merge(id, flag) {
+  const p = project(); id || die('merge <id> [--approved]');
+  const r = Q.merge(p, id, { approved: flag === '--approved' });
+  out(JSON.stringify(r, null, 2));
+  if (!r.ok) process.exit(1);
+}
+async function block(id, ...reason) {
+  const p = project(); id || die('block <id> "<reason>"');
+  if (!Q.findIssue(p, id)) die(`no issue ${id}`);
+  out(JSON.stringify(Q.blockIssue(p, id, reason.join(' ') || 'blocked by orchestrator'), null, 2));
+}
+async function diff(id) { out(Q.diff(project(), id || die('diff <id>'))); }
+async function integrate(kind, id) {
+  const p = project();
+  const r = kind === 'ticket' ? Q.integrateTicket(p, id) : kind === 'feature' ? Q.integrateFeature(p, id) : die('integrate ticket <id> | feature <id>');
+  out(JSON.stringify(r, null, 2));
+  if (!r.ok) process.exit(1);
+}
+async function close(kind, id) {
+  const p = project();
+  const r = kind === 'ticket' ? Q.closeTicket(p, id) : kind === 'feature' ? Q.closeFeature(p, id) : die('close ticket <id> | feature <id>');
+  out(JSON.stringify(r, null, 2));
+}
+async function planSync() { Q.syncPlan(project()); out('PLAN.md regenerated'); }
