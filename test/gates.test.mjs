@@ -49,9 +49,13 @@ test('only the user ends grill: mode refuses without a matching user prompt', ()
   assert.equal(challengerDispatched(r, 'Challenge this draft.').denied, false);
   userTyped(r, '/harness:crank');
   assert.equal(harness(r, 'mode', 'work').code, 0);
-  // a new planning round invalidates the old challenge
+  // a new planning round invalidates the old challenge; below the machine floor (architecture unchanged, no ticket,
+  // no planner-reviewed issue) work opens without one, above it (architecture edited) the challenge is demanded again
   userTyped(r, '/carve'); assert.equal(harness(r, 'mode', 'plan').code, 0);
-  userTyped(r, '/crank'); assert.equal(harness(r, 'mode', 'work').code, 1);
+  userTyped(r, '/crank'); const below = harness(r, 'mode', 'work'); assert.equal(below.code, 0); assert.match(below.out, /challenge: not required/);
+  userTyped(r, '/carve'); assert.equal(harness(r, 'mode', 'plan').code, 0);
+  writeManifest(r, undefined, '\n# Architecture\nedited\n');
+  userTyped(r, '/crank'); const above = harness(r, 'mode', 'work'); assert.equal(above.code, 1); assert.match(above.err, /ARCHITECTURE\.md changed/);
 });
 
 test('grill Bash that changes source is a recorded violation and blocks mode change', () => {

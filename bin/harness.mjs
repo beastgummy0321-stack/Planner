@@ -2,6 +2,7 @@
 // harness CLI — deterministic control-plane scripts. The LLM routes; this schedules.
 import fs from 'node:fs';
 import path from 'node:path';
+import crypto from 'node:crypto';
 import {
   MODES, QUEUE_DIRS, findProject, readState, writeState, readJson, writeJsonAtomic,
   readLease, writeLease, listLeases, leasePath, tryGit, git, norm, worktreeRoot, isInside, parseFrontmatter, planHash,
@@ -24,6 +25,7 @@ try {
 }
 
 function out(s) { process.stdout.write(s + '\n'); }
+function fileHash(f) { try { return crypto.createHash('sha1').update(fs.readFileSync(f)).digest('hex'); } catch { return null; } }
 function die(msg) { throw new Error(msg); }
 function project() { return findProject(cwd) || die('no .harness/ here — run `harness init` in the project root'); }
 
@@ -87,11 +89,24 @@ async function mode(next) {
     // this planning round AND come back; a CLEAR covers exactly the plan it read
     // (gates the plan → work transition only; once in work mode the queue itself rewrites .work/, and /crank re-runs this command to recover)
     const ch = readJson(challengeFile, null);
-    if (!ch) die('refused: no Independent Challenge this planning round. In /carve, dispatch Agent(subagent_type: "harness:challenger") on the finished draft (one round), then /crank.');
+    const archHash = fileHash(path.join(p.root, 'ARCHITECTURE.md'));
     if (state.mode !== 'work') {
-      if (!ch.completed) die('refused: the Independent Challenge was dispatched but never returned (timeout/crash?). A dispatch is not a review; dispatch it again.');
-      if (ch.verdict === 'CLEAR' && ch.plan_hash !== planHash(p.root)) die('refused: the plan changed after the challenger said CLEAR; its review covers the old draft. Dispatch the challenger again.');
+      // machine floor: the challenge is mandatory when the architecture changed since the last plan→work transition,
+      // when any open issue carries review: planner, or when more than one ticket is open. Below that floor a bounded
+      // plan enters work without it (the planner may still ask for one); above it the rules are unchanged.
+      const why = [];
+      if (state.arch_hash !== archHash) why.push(state.arch_hash ? 'ARCHITECTURE.md changed' : 'first plan');
+      if (QUEUE_DIRS.some((d) => Q.listIssues(p, d).some((i) => Q.readIssue(p, d, i).issue?.review === 'planner'))) why.push('an issue needs planner review');
+      if (Q.listTickets(p).filter((t) => !Q.readTicket(p, t).data.closed).length > 1) why.push('more than one open ticket');
+      if (!ch) {
+        if (why.length) die(`refused: no Independent Challenge this planning round (${why.join(', ')}). In /carve, dispatch Agent(subagent_type: "harness:challenger") on the finished draft (one round), then /crank.`);
+        out('challenge: not required (architecture unchanged, one ticket, no planner-reviewed issue)');
+      } else {
+        if (!ch.completed) die('refused: the Independent Challenge was dispatched but never returned (timeout/crash?). A dispatch is not a review; dispatch it again.');
+        if (ch.verdict === 'CLEAR' && ch.plan_hash !== planHash(p.root)) die('refused: the plan changed after the challenger said CLEAR; its review covers the old draft. Dispatch the challenger again.');
+      }
     }
+    state.arch_hash = archHash;
     // orphan leases from a dead session: save partial work, re-queue, free the touch prefix
     for (const r of Q.recover(p, last.session_id)) out(`recovered ${r.issue}: session ${r.session || '?'} is gone; re-queued${r.log ? ', partial diff saved to ' + r.log : ''}`);
   }

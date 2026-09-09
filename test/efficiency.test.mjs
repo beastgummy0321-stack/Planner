@@ -59,6 +59,31 @@ test('scenario 37: a copy-only issue never installs dependencies — attach, wor
   } finally { npm.restore(); }
 });
 
+test('scenario 40: the Independent Challenge is demanded only above the machine floor — first plan, architecture change, planner-reviewed issue, or a second ticket', () => {
+  const r = tmpRepo(); harness(r, 'init'); writeManifest(r); g(r, 'add', '-A'); g(r, 'commit', '-qm', 'arch');
+  setMode(r, 'plan'); ticket(r, { id: 'F01-T01' }); writeIssue(r, 'ready', ISSUE());
+  // first plan: the architecture is new → challenge required
+  userTyped(r, '/crank'); let w = harness(r, 'mode', 'work'); assert.equal(w.code, 1); assert.match(w.err, /first plan/);
+  challengerDispatched(r); userTyped(r, '/crank'); w = harness(r, 'mode', 'work'); assert.equal(w.code, 0, w.err);
+  // bounded second round: same architecture, one ticket, review: none → no challenge needed, and it says so
+  setMode(r, 'plan'); writeIssue(r, 'ready', ISSUE({ id: 'F01-T01-I02' }));
+  userTyped(r, '/crank'); w = harness(r, 'mode', 'work'); assert.equal(w.code, 0, w.err); assert.match(w.out, /challenge: not required/);
+  // architecture edited → required again
+  setMode(r, 'plan'); writeManifest(r, MANIFEST(), '\n# Architecture\nnew module reasoning\n');
+  userTyped(r, '/crank'); w = harness(r, 'mode', 'work'); assert.equal(w.code, 1); assert.match(w.err, /ARCHITECTURE\.md changed/);
+  challengerDispatched(r); userTyped(r, '/crank'); assert.equal(harness(r, 'mode', 'work').code, 0);
+  // a planner-reviewed issue → required
+  setMode(r, 'plan'); writeIssue(r, 'ready', ISSUE({ id: 'F01-T01-I03', interface_change: true, review: 'planner' }));
+  userTyped(r, '/crank'); w = harness(r, 'mode', 'work'); assert.equal(w.code, 1); assert.match(w.err, /planner review/);
+  fs.rmSync(path.join(r, '.work/ready/F01-T01-I03.md'));
+  // a second open ticket → required
+  ticket(r, { id: 'F01-T02' });
+  userTyped(r, '/crank'); w = harness(r, 'mode', 'work'); assert.equal(w.code, 1); assert.match(w.err, /more than one open ticket/);
+  // a challenge that did happen is still held to completed + plan_hash (scenarios 21/22 unchanged)
+  challengerDispatched(r, undefined, { complete: false });
+  userTyped(r, '/crank'); w = harness(r, 'mode', 'work'); assert.equal(w.code, 1); assert.match(w.err, /never returned/);
+});
+
 test('scenario 39: a docs-only diff skips typecheck/build/smoke; the same issue touching code runs them', { timeout: 120000 }, () => {
   const marker = path.join(os.tmpdir(), `harness-tc-${Date.now()}.txt`).replace(/\\/g, '/');
   const touchMarker = `node -e "require('fs').appendFileSync('${marker}','x')"`;
