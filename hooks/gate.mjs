@@ -1,5 +1,6 @@
 // PreToolUse: the No-Build gate, the scope gate, the worker Bash allowlist, dispatch control.
 import path from 'node:path';
+import { appendFileSync as fsAppend } from 'node:fs';
 import {
   findProject, readState, findLeaseByCwd, findLeaseByAgent, listLeases, writeLease, worktreeRoot,
   isInside, rel, matchesAny, norm, snapshot, writeJsonAtomic, readStdinJson, deny, allow,
@@ -13,6 +14,9 @@ const GRILL_ALLOW = ['.harness/scratch/**'];
 const input = readStdinJson();
 const cwd = input.cwd || process.cwd();
 const project = findProject(cwd);
+if (process.env.HARNESS_DEBUG_LOG) {
+  try { fsAppend(process.env.HARNESS_DEBUG_LOG, JSON.stringify({ hook: 'gate', input }) + '\n'); } catch {}
+}
 if (!project) allow();
 
 const state = readState(project);
