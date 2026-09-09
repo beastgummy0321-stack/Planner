@@ -155,3 +155,17 @@ test('review: planner issues cannot be merged without --approved', () => {
   const m = harness(r, 'merge', 'F01-T01-I01');
   assert.equal(m.code, 1); assert.match(m.err, /needs planner review/);
 });
+
+test('paths are canonical: a hook cwd through a junction/short name still resolves to the attached worktree lease', () => {
+  const r = tmpRepo(); harness(r, 'init'); writeManifest(r); setMode(r, 'plan'); setMode(r, 'work');
+  writeIssue(r, 'ready', ISSUE());
+  assert.equal(harness(r, 'claim', 'F01-T01-I01').code, 0);
+  const wt = addWorktree(r, 'F01-T01-I01');
+  assert.equal(harness(wt, 'attach', 'F01-T01-I01').code, 0);
+  const alias = path.join(process.env.TEMP || '/tmp', `harness-alias-${Date.now()}`);
+  fs.symlinkSync(wt, alias, process.platform === 'win32' ? 'junction' : 'dir'); // CI runners hand hooks RUNNER~1-style cwds
+  const agent = { agent_id: 'a1', agent_type: 'harness:worker' };
+  assert.equal(W(alias, 'src/modules/identity/x.ts', agent).denied, false);
+  assert.equal(W(alias, 'src/app/main.ts', agent).denied, true);
+  fs.rmSync(alias, { recursive: false, force: true });
+});
