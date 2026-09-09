@@ -60,8 +60,14 @@ function applyAdapter(r) {
 
 test('python adapter: apply, green, prove red on deep import + ownership, scenario 5/6/7', { timeout: 120000 }, () => {
   const r = pyProject();
+  assert.doesNotMatch(harness(r, 'adapter', 'plan').out, /up to date/);
   applyAdapter(r);
   assert.equal(harness(r, 'adapter', 'check').code, 0);
+  // scenario 41: an already wired checker is reported up to date — no approval, no re-apply, no re-prove
+  assert.match(harness(r, 'adapter', 'plan').out, /up to date/);
+  fs.writeFileSync(path.join(r, 'tools/check_architecture.py'), '# hand-edited\n' + fs.readFileSync(path.join(r, 'tools/check_architecture.py'), 'utf8'));
+  assert.doesNotMatch(harness(r, 'adapter', 'plan').out, /up to date/);
+  applyAdapter(r);
   const prove = harness(r, 'adapter', 'prove');
   assert.equal(prove.code, 0, prove.out + prove.err);
   const res = JSON.parse(prove.out);

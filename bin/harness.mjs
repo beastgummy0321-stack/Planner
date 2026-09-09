@@ -225,6 +225,7 @@ async function adapter(sub, flag) {
   const p = project();
   if (sub === 'plan') {
     const plan = planAdapter(p.root);
+    if (plan.unchanged) { out(`stack: ${plan.stack}\nup to date — the checker is already wired for this manifest; skip apply and prove, run: harness adapter check`); return; }
     out(`stack: ${plan.stack}
 install: ${plan.install.length ? plan.install.join('; ') : '(nothing)'}
 add: ${plan.add.join(', ')}
