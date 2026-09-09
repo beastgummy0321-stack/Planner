@@ -1,0 +1,272 @@
+# harness — v1 design
+
+The durable design of this plugin. Current truth only; git is the history.
+Written 2026-09-10 from the handoff report, the external reviewer's three replies,
+and five final rulings (§9). Nothing here is "V2": every section is a v1 completion
+condition (§11).
+
+## 1. What it is
+
+A Claude Code plugin that turns a vague wish into shipped code through three
+user entry points, with the model hierarchy, work decomposition, container
+boundaries and cleanup built in:
+
+```
+/grill   frontier + user   think it through   (no build)
+/plan    planner           architecture + feature → ticket → issue
+/work    control plane     claim → worktree → implement → gates → merge → integrate → clean
+```
+
+Reliability comes from hierarchy + tiny execution scope + hard module boundaries
++ machine verification + upward escalation — not from rules. A rule is added only
+to protect an architecture invariant, execution isolation, or verification
+correctness, or because a reproducible failure has no other fix.
+
+## 2. Roles (not vendors)
+
+| role     | who                                        | does                                                     | never                                              |
+|----------|--------------------------------------------|----------------------------------------------------------|----------------------------------------------------|
+| frontier | the model the user is talking to           | grill, direction, architecture escalation, final say     | routine implementation, issue review, log reading  |
+| planner  | `agents/planner.md` (opus-class)           | ARCHITECTURE manifest, containers, feature/ticket/issue, blocked resolution, high-risk review, integration | redefine product goals (escalate to /grill instead) |
+| worker   | `agents/worker.md` (sonnet-class, worktree)| one issue: implement, issue tests, verify                | architecture, scope creep, public interface change unless the issue says so, governance docs |
+| utility  | `agents/utility.md` (haiku-class)          | grep, inventory, log triage, evidence, mechanical cleanup | conclusions about architecture                     |
+
+No cross-vendor dispatch. `frontier` is whoever runs the main conversation.
+
+## 3. Modes and the No-Build Gate
+
+`.harness/state.json` holds `{ "mode": "grill" | "plan" | "work", "violations": [] }`.
+No `.harness/` directory → the plugin is inert for that project.
+
+| mode  | Write/Edit allowed (main tree)                                   | Agent dispatch allowed        |
+|-------|------------------------------------------------------------------|-------------------------------|
+| grill | `.harness/scratch/**` only                                       | utility, Explore              |
+| plan  | `ARCHITECTURE.md`, `.work/**`, `.harness/**`, adapter-declared config paths after the user approved the install plan | planner, utility |
+| work  | `.work/**`, `.harness/**` (orchestration only); in a worktree: the lease's `touch` minus `do_not_touch` | worker (only against a claimed lease), planner, utility |
+
+Everything else is denied by PreToolUse (`hooks/gate.mjs`), not warned.
+
+**Only the user changes mode.** `harness mode <m>` succeeds only when the most
+recent user prompt (recorded by the UserPromptSubmit hook, which the model
+cannot fake) invoked the matching skill (`/grill`, `/plan`, `/work`). A model
+that calls the Skill tool on its own is refused. There is no readiness
+checklist, round limit, or "the model thinks it has enough" exit.
+
+Bash in the main tree is allowed in every mode (the frontier researches, the
+control plane runs `harness` scripts), but every Bash call is baselined before
+and diffed after (`git status --porcelain` + `git diff HEAD --numstat`, plus the
+same for the `.harness/scratch` exemption). A change outside the mode's
+allowlist is recorded in `state.violations` and reported with exit 2; mode
+transitions and `harness merge` refuse while violations exist. Reverting the
+file clears it.
+
+## 4. Durable documents in a target project
+
+```
+ARCHITECTURE.md      frontmatter = machine manifest (JSON, which is valid YAML); body = current truth prose
+.work/               tracked: the only work queue
+  PLAN.md            active Goal → Feature → Ticket tree; finished rows deleted
+  tickets/F01-T01.md Outcome · Architecture scope · Issues · Integration verify · Acceptance
+  ready/ doing/ blocked/ done/   issue files F01-T01-I01.md — the folder is the status
+.harness/            gitignored: state.json, scratch/, runtime/leases/, runtime/baselines/, runtime/last-prompt.json
+```
+
+No CONSTITUTION, no ADR system, no per-module contract markdown, no BOARD
+journal, no decision archive. A settled choice is written into ARCHITECTURE.md;
+the previous version lives in git. User messages are candidates until the user
+says "use this direction" inside /grill.
+
+### 4.1 Manifest (ARCHITECTURE.md frontmatter)
+
+```json
+{
+  "harness": 1,
+  "stack": "ts",
+  "app_shell": ["src/app/**"],
+  "modules": {
+    "identity": { "root": "src/modules/identity", "public": "src/modules/identity/index.ts",
+                  "may_depend_on": [], "owns": ["src/modules/identity/**"] },
+    "billing":  { "root": "src/modules/billing",  "public": "src/modules/billing/index.ts",
+                  "may_depend_on": ["identity"], "owns": ["src/modules/billing/**"] }
+  },
+  "resources": {
+    "payments": { "owner": "billing", "kind": "supabase-table",
+                  "definition": ["supabase/migrations/**"], "symbol": "payments" }
+  },
+  "verify": { "typecheck": "npx tsc --noEmit", "build": "npm run build", "test": "npm test" },
+  "checker": { "command": "npm run check:architecture" }
+}
+```
+
+`harness validate` rejects: unknown stack, module without `root`/`public`,
+`public` outside `root`, `may_depend_on` naming unknown modules or forming a
+cycle, resource with unknown owner or unsupported `kind`, paths that do not
+exist. There is exactly one module registry: this block.
+
+### 4.2 Issue (`.work/*/F01-T01-I01.md`)
+
+```
+---
+{ "id": "F01-T01-I01", "feature": "F01", "ticket": "T01", "after": [],
+  "touch": ["src/modules/identity/**"], "do_not_touch": [],
+  "verify": ["npm test -- identity"], "privileged": [],
+  "interface_change": false, "review": "none" }
+---
+# Objective
+# Done
+# Verify
+# Blocked if
+```
+
+Issue-ready gate (planner answers before filing): would a worker that never saw
+/grill, given only this file, the manifest slice for its module and the code,
+still have to choose module ownership, a public interface, a data model, a
+dependency direction or product behaviour? If yes the issue is not ready.
+`review` must be `planner` when `interface_change` is true, or the issue touches
+schema/migrations, permissions, money, module ownership, or dependency files
+(`package.json`, lockfiles, `pyproject.toml`).
+
+## 5. Container: three machine layers
+
+**Layer 1 — scope (plugin, any language).** PreToolUse denies Write/Edit outside
+the lease's `touch` (minus `do_not_touch`). Worker Bash is default-deny: only an
+exact string match with the issue's `verify`/`privileged` entries or a harness
+fixed command (`node <plugin>/bin/harness.mjs …`) runs; exploration is
+Read/Grep/Glob. No shell parsing. After every allowed Bash, worktree and main
+tree are diffed against their pre-call baseline; any change outside `touch`
+marks the lease violated → the issue goes to `blocked/` and the worktree is
+discarded, never kept.
+
+**Layer 2 — import boundary (plugin generates, project tool runs).** From the
+manifest, `harness adapter apply` writes the checker config and package script
+for the stack and installs the dev dependency — after printing what it will
+install/modify/add and the user approving once. Rules enforced: one declared
+public entry per module; cross-module imports only through it; no cycles; no
+module imports the app shell. Existing equivalent tooling is reused, not
+duplicated. Stacks in v1: `ts` (dependency-cruiser), `python` (import-linter for
+forbidden/cycle contracts + a shipped AST script for entry-only). Any other
+stack: `/plan` stops with `unsupported architecture adapter`; it never
+downgrades to "manual review".
+
+**Layer 3 — ownership (manifest + stack analyzer).** Logical owner ≠ definition
+location: `resources.<name>.owner` names the module, `definition` names where
+the schema physically lives (a shared migrations dir or central schema file is
+legal). What is enforced is direct data access: a stack-specific, symbol-aware
+analyzer flags any non-owner module that reads/writes the resource
+(`supabase-table`: `.from("x")`, `.table("x")`, `.rpc(...)` targets;
+`drizzle-table`: import/use of the table symbol; `sqlalchemy-model`: model
+class import/use). Changing a resource's definition is allowed only in an issue
+whose ticket belongs to the owner, with `review: planner`. An unknown
+data-access pattern stops `/plan` with `unsupported ownership adapter`; generic
+grep is evidence, never the mechanism.
+
+## 6. Work hierarchy and queue
+
+Goal → Feature (`F01`) → Ticket (`F01-T01`) → Issue (`F01-T01-I01`). Ticket is a
+first-class object: it owns integration acceptance and groups issues.
+
+Queue = folders. `ready → doing` is an atomic rename (claim); a second claim
+fails. An issue is claimable when every `after` id is in `done/`. Parallel
+workers are allowed when `after` is satisfied, `touch` globs do not overlap, no
+two change the same public entry, and each has its own worktree; otherwise
+sequential. Dependency-changing issues are always sequential.
+
+## 7. /work lifecycle
+
+```
+harness queue next            → claimable issues (deps, overlap, dependency-change serialisation)
+harness claim <id>            → ready/ → doing/ (atomic), lease file created (awaiting attach)
+Agent(harness:worker, isolation: worktree)   ← hook denies this dispatch unless such a lease exists
+  worker: harness attach <id> → lease gets cwd, branch, base SHA; env adapter runs frozen install
+  worker: implement           → Layer 1 gates on every tool call
+  worker: verify commands     → exact-match Bash only
+harness finish <id>           → scope post-diff · checker · ownership analyzer · issue verify · typecheck/build
+                                 all green → review (if planner) → merge into base → done/
+                                 any red   → blocked/ with Observed · Evidence · Why the issue cannot decide · Boundary affected
+harness integrate ticket <id> → when all issues done: planner integration review, ticket verify, acceptance; delete issue bodies
+harness integrate feature <id>→ full checker + tests + acceptance; delete ticket files and PLAN row; remove worktrees
+```
+
+The main conversation is the control plane: it calls scripts and routes
+results. It does not fork `/work` to a subagent (subagents cannot spawn
+subagents). The scheduler is code, not the LLM. The planner appears only at
+blocked, high-risk review, interface/ownership change, and integration.
+
+Worktrees are Claude Code's own (`isolation: worktree`), one per issue, never
+the shared main tree. Environment adapter: `ts` → detect lockfile, frozen
+install with the project's package manager (npm ci / pnpm install
+--frozen-lockfile / yarn --immutable) using its global cache; `python` → `uv
+sync` per worktree with the shared cache. No shared `node_modules` junction:
+that is shared mutable state. `.worktreeinclude` carries gitignored runtime
+files (`.env`) into worktrees.
+
+Runtime state for parallel workers lives in per-issue lease files
+`.harness/runtime/leases/<id>.json` (`issue, agent_id, worktree, branch,
+base_sha, allowed_commands, touch, do_not_touch, violations`). `state.json`
+holds only low-frequency global state. Hooks resolve "which issue am I" from
+the call's `cwd` (worktree path → lease) and `agent_id`.
+
+## 8. Escalation and cleanup
+
+Blocked is a formal state, not a retry loop. Worker → `blocked/` with evidence.
+Planner resolves re-slicing, missing deps, ticket order, unclear contracts. If
+the block is about product behaviour, ownership, architecture direction, or the
+plan itself being wrong → back to `/grill` → user.
+
+GC is built into `/work`: issue done → body kept until ticket integration →
+deleted; ticket closed → row kept in PLAN until feature close → deleted;
+feature closed → worktrees removed, scratch cleared, ARCHITECTURE.md updated
+only if truth changed. `.harness/scratch/discovery.md` is deleted when `/plan`
+produces output. No completion reports, lessons-learned, postmortems, ADRs.
+
+SessionStart injects only: mode, active feature/ticket/issues, blocked issues,
+violations. Never planning history, finished issues, or the full rule set.
+Context shrinks per tier: frontier reads the problem and repo; planner reads
+grill output, manifest, active work; worker reads one issue, its module slice,
+its code; utility reads one evidence target.
+
+## 9. Five final rulings (2026-09-10, closed)
+
+1. Ownership = logical owner + physical definition path; enforced on direct
+   data access via symbol-aware stack adapters; unknown patterns stop `/plan`.
+2. Worker Bash default-deny, exact-match allowlist only; baseline diff after
+   every allowed call on worktree and main tree.
+3. One worktree per issue, environment adapter with frozen install + shared
+   package-manager cache; no junctioned `node_modules`; dependency changes are
+   serialised and planner-reviewed.
+4. `/work` stays in the top-level control plane with deterministic scripts;
+   never forked to a planner subagent.
+5. Per-issue lease files with atomic claim; `state.json` holds only global
+   low-frequency state; hooks resolve the issue from `cwd` and agent identity.
+
+## 10. Explicitly not carried over from skeleton-slice
+
+Constitution, ADR system/index/hooks, A/B/C routes, screen = module, universal
+pull-out test, third-caller rule, global line cap, BOARD journal, ticket
+contradiction essays, exhaustive shared-files prose, forced two-round
+convergence, automatic documentation after work. Bringing any back requires a
+reproduced failure of this harness first.
+
+## 11. Definition of done for v1
+
+The whole chain runs on a real project, and each of these regression scenarios
+has been proven red once, then green:
+
+1. Self-contradicting issue → `blocked/`, not a worker retry loop.
+2. Worker bypasses a public entry → checker red.
+3. Worker edits outside `touch` → PreToolUse deny.
+4. Worker uses Bash to bypass scope → deny, or post-diff → blocked + worktree discarded.
+5. Cross-module deep import → checker red.
+6. Dependency cycle → checker red.
+7. Non-owner module touches another's resource → ownership red.
+8. Implementation attempted before the user ended /grill → No-Build deny.
+9. New user idea taken as a decision → ARCHITECTURE.md unchanged.
+
+## 12. Implementation order (dependency order, not phases)
+
+1. Plugin shell ✓ 2. state + hooks foundation (deny proven, plugin loads via
+`claude --plugin-dir`) 3. /grill (No-Build, scratch, user-only transition)
+4. manifest parser/validator 5. container adapters ts + python 6. scope + Bash
+enforcement + worktree + env adapter 7. /plan 8. queue 9. /work 10. ownership
+analyzers 11. ticket/feature integration 12. lifecycle cleanup 13. stress
+regression (§11).
