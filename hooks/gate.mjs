@@ -14,7 +14,8 @@ const GRILL_ALLOW = ['.harness/scratch/**'];
 const input = readStdinJson();
 const cwd = input.cwd || process.cwd();
 const project = findProject(cwd);
-if (process.env.HARNESS_DEBUG_LOG) {
+if (process.env.HARNESS_DEBUG_LOG && !(project && isInside(process.env.HARNESS_DEBUG_LOG, project.root))) {
+  // never write the debug log inside the governed tree: it would dirty the baseline diff
   try { fsAppend(process.env.HARNESS_DEBUG_LOG, JSON.stringify({ hook: 'gate', input }) + '\n'); } catch {}
 }
 if (!project) allow();
