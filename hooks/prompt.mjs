@@ -1,5 +1,5 @@
 // UserPromptSubmit: record the latest genuine user prompt. `harness mode` trusts only this file,
-// so a model calling the Skill tool on its own cannot end /grill.
+// so a model calling the Skill tool on its own cannot end /dig.
 import path from 'node:path';
 import { findProject, writeJsonAtomic, readStdinJson } from '../lib/core.mjs';
 

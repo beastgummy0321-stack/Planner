@@ -61,7 +61,7 @@ async function init() {
   if (!/^\.harness\/?$/m.test(cur)) add += '.harness/\n';
   if (!/^\.claude\/worktrees\/?$/m.test(cur)) add += '.claude/worktrees/\n';
   if (add) fs.writeFileSync(gi, cur + (cur && !cur.endsWith('\n') ? '\n' : '') + add);
-  out(`initialised ${root}: mode grill. Type /grill to start.`);
+  out(`initialised ${root}: mode grill. Type /dig to start.`);
 }
 
 async function status() { out(statusText(project())); }
@@ -71,9 +71,10 @@ async function mode(next) {
   if (!MODES.includes(next)) die(`mode must be one of ${MODES.join(', ')}`);
   const state = readState(p);
   const last = readJson(path.join(p.harness, 'runtime', 'last-prompt.json'), null);
-  const re = new RegExp(`(^|\\s)/(harness:)?${next}(\\s|$)`, 'i');
+  const skill = { grill: 'dig', plan: 'carve', work: 'crank' }[next];
+  const re = new RegExp(`(^|\\s)/(harness:)?${skill}(\\s|$)`, 'i');
   if (!last || !re.test(last.prompt)) {
-    die(`refused: the last user prompt did not invoke /${next}. Only the user changes mode by typing /${next}; a model may not self-approve.`);
+    die(`refused: the last user prompt did not invoke /${skill}. Only the user changes mode by typing /${skill}; a model may not self-approve.`);
   }
   if (state.violations?.length) die(`refused: unresolved violations in main tree: ${state.violations.map((v) => v.file).join(', ')}. Revert them first.`);
   if (next === 'work') {
@@ -81,7 +82,7 @@ async function mode(next) {
     if (errors.length) die(`refused: ARCHITECTURE.md invalid:\n  ${errors.join('\n  ')}`);
   }
   if (next === 'plan' && state.mode === 'grill') {
-    // discovery scratch survives until /plan produces output; the plan skill deletes it.
+    // discovery scratch survives until /carve produces output; the plan skill deletes it.
   }
   state.mode = next;
   writeState(p, state);

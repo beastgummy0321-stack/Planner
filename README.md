@@ -4,9 +4,9 @@ A Claude Code plugin: decision → decomposition → issue execution, with the m
 hierarchy, container boundaries and cleanup built in. Design: [SPEC.md](SPEC.md).
 
 ```
-/grill   think it through with the user   — frontier model, nothing is built
-/plan    architecture + feature → ticket → issue   — planner model
-/work    claim → worktree → implement → gates → merge → integrate → clean   — control plane + workers
+/dig   think it through with the user   — frontier model, nothing is built
+/carve    architecture + feature → ticket → issue   — planner model
+/crank    claim → worktree → implement → gates → merge → integrate → clean   — control plane + workers
 ```
 
 ## Install (local)
@@ -29,7 +29,7 @@ tools/            the container checker the project can run without the plugin (
 
 Requires git in the target project (worktrees, baseline diffs). Stacks with a container
 adapter in v1: `ts` (dependency-cruiser + ownership analyzer), `python` (shipped AST checker).
-Others stop `/plan` with `unsupported architecture adapter`.
+Others stop `/carve` with `unsupported architecture adapter`.
 
 ## The gates, in one table
 

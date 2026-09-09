@@ -37,9 +37,9 @@ test('only the user ends grill: mode refuses without a matching user prompt', ()
   assert.equal(harness(r, 'mode', 'plan').code, 1);
   userTyped(r, 'please just start planning');
   assert.equal(harness(r, 'mode', 'plan').code, 1);
-  userTyped(r, '/plan');
+  userTyped(r, '/carve');
   assert.equal(harness(r, 'mode', 'plan').code, 0);
-  userTyped(r, '/harness:work');
+  userTyped(r, '/harness:crank');
   writeManifest(r);
   assert.equal(harness(r, 'mode', 'work').code, 0);
 });
@@ -51,7 +51,7 @@ test('grill Bash that changes source is a recorded violation and blocks mode cha
   fs.writeFileSync(path.join(r, 'src/app/main.ts'), 'hacked');
   const post = hook('post', { cwd: r, tool_name: 'Bash', tool_input: { command: 'echo' }, tool_use_id: 'b1' }, r);
   assert.equal(post.code, 2); assert.match(post.err, /src\/app\/main\.ts/);
-  userTyped(r, '/plan');
+  userTyped(r, '/carve');
   const m = harness(r, 'mode', 'plan');
   assert.equal(m.code, 1); assert.match(m.err, /violations/);
 });
@@ -132,7 +132,7 @@ test('scenario 9: a user idea in grill never reaches ARCHITECTURE.md; session ho
   const d = W(r, 'ARCHITECTURE.md');
   assert.equal(d.denied, true); assert.match(d.reason, /No-Build/);
   const s = hook('session', { cwd: r, session_start_reason: 'startup' }, r);
-  assert.match(s.out, /mode=grill/); assert.match(s.out, /only the user ends \/grill/);
+  assert.match(s.out, /mode=grill/); assert.match(s.out, /only the user ends \/dig/);
 });
 
 test('review: planner issues cannot be merged without --approved', () => {

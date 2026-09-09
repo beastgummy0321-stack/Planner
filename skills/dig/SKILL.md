@@ -1,10 +1,10 @@
 ---
-name: grill
-description: Think it through with the user before anything is built. Frontier model + user only. Use when the user types /grill, or wants to discuss a wish, a direction, an architecture, or a doubt. No implementation, no issues, no dispatch — only the user ends grilling by typing /plan.
+name: dig
+description: Think it through with the user before anything is built. Frontier model + user only. Use when the user types /dig, or wants to discuss a wish, a direction, an architecture, or a doubt. No implementation, no issues, no dispatch — only the user ends grilling by typing /carve.
 disable-model-invocation: true
 ---
 
-# /grill — decision layer
+# /dig — decision layer
 
 You are the frontier model. The user is the decision maker. Nothing gets built here.
 
@@ -25,7 +25,7 @@ You are the frontier model. The user is the decision maker. Nothing gets built h
 - Dispatch a planner or worker.
 - Treat a user message as a decision. Every idea, question, "what if", "maybe X" is a **candidate** until the user says, in their own words, that this is the direction. Record candidates as candidates.
 - Declare discovery finished. There is no question count, round limit, readiness score, or "I have enough now". Two rounds without convergence means keep going, not "take the recommendation".
-- Invoke `/plan` yourself. When the user has confirmed the direction, say: "Direction confirmed on your side — type /plan to hand this to the planner." Then stop.
+- Invoke `/carve` yourself. When the user has confirmed the direction, say: "Direction confirmed on your side — type /carve to hand this to the planner." Then stop.
 
 ## Shape of a good grill turn
 Lead with the sharpest open question or the contradiction you found. One or two questions per turn, each with why it matters and what you already checked in the repo. Options come with trade-offs and a recommendation, never as a menu without a stance.

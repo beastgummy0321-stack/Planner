@@ -12,9 +12,9 @@ user entry points, with the model hierarchy, work decomposition, container
 boundaries and cleanup built in:
 
 ```
-/grill   frontier + user   think it through   (no build)
-/plan    planner           architecture + feature → ticket → issue
-/work    control plane     claim → worktree → implement → gates → merge → integrate → clean
+/dig   frontier + user   think it through   (no build)
+/carve    planner           architecture + feature → ticket → issue
+/crank    control plane     claim → worktree → implement → gates → merge → integrate → clean
 ```
 
 Reliability comes from hierarchy + tiny execution scope + hard module boundaries
@@ -27,7 +27,7 @@ correctness, or because a reproducible failure has no other fix.
 | role     | who                                        | does                                                     | never                                              |
 |----------|--------------------------------------------|----------------------------------------------------------|----------------------------------------------------|
 | frontier | the model the user is talking to           | grill, direction, architecture escalation, final say     | routine implementation, issue review, log reading  |
-| planner  | `agents/planner.md` (opus-class)           | ARCHITECTURE manifest, containers, feature/ticket/issue, blocked resolution, high-risk review, integration | redefine product goals (escalate to /grill instead) |
+| planner  | `agents/planner.md` (opus-class)           | ARCHITECTURE manifest, containers, feature/ticket/issue, blocked resolution, high-risk review, integration | redefine product goals (escalate to /dig instead) |
 | worker   | `agents/worker.md` (sonnet-class, worktree)| one issue: implement, issue tests, verify                | architecture, scope creep, public interface change unless the issue says so, governance docs |
 | utility  | `agents/utility.md` (haiku-class)          | grep, inventory, log triage, evidence, mechanical cleanup | conclusions about architecture                     |
 
@@ -48,7 +48,7 @@ Everything else is denied by PreToolUse (`hooks/gate.mjs`), not warned.
 
 **Only the user changes mode.** `harness mode <m>` succeeds only when the most
 recent user prompt (recorded by the UserPromptSubmit hook, which the model
-cannot fake) invoked the matching skill (`/grill`, `/plan`, `/work`). A model
+cannot fake) invoked the matching skill (`/dig`, `/carve`, `/crank`). A model
 that calls the Skill tool on its own is refused. There is no readiness
 checklist, round limit, or "the model thinks it has enough" exit.
 
@@ -74,7 +74,7 @@ ARCHITECTURE.md      frontmatter = machine manifest (JSON, which is valid YAML);
 No CONSTITUTION, no ADR system, no per-module contract markdown, no BOARD
 journal, no decision archive. A settled choice is written into ARCHITECTURE.md;
 the previous version lives in git. User messages are candidates until the user
-says "use this direction" inside /grill.
+says "use this direction" inside /dig.
 
 ### 4.1 Manifest (ARCHITECTURE.md frontmatter)
 
@@ -119,7 +119,7 @@ exist. There is exactly one module registry: this block.
 ```
 
 Issue-ready gate (planner answers before filing): would a worker that never saw
-/grill, given only this file, the manifest slice for its module and the code,
+/dig, given only this file, the manifest slice for its module and the code,
 still have to choose module ownership, a public interface, a data model, a
 dependency direction or product behaviour? If yes the issue is not ready.
 `review` must be `planner` when `interface_change` is true, or the issue touches
@@ -145,7 +145,7 @@ public entry per module; cross-module imports only through it; no cycles; no
 module imports the app shell. Existing equivalent tooling is reused, not
 duplicated. Stacks in v1: `ts` (dependency-cruiser), `python` (import-linter for
 forbidden/cycle contracts + a shipped AST script for entry-only). Any other
-stack: `/plan` stops with `unsupported architecture adapter`; it never
+stack: `/carve` stops with `unsupported architecture adapter`; it never
 downgrades to "manual review".
 
 **Layer 3 — ownership (manifest + stack analyzer).** Logical owner ≠ definition
@@ -157,7 +157,7 @@ analyzer flags any non-owner module that reads/writes the resource
 `drizzle-table`: import/use of the table symbol; `sqlalchemy-model`: model
 class import/use). Changing a resource's definition is allowed only in an issue
 whose ticket belongs to the owner, with `review: planner`. An unknown
-data-access pattern stops `/plan` with `unsupported ownership adapter`; generic
+data-access pattern stops `/carve` with `unsupported ownership adapter`; generic
 grep is evidence, never the mechanism.
 
 ## 6. Work hierarchy and queue
@@ -171,7 +171,7 @@ workers are allowed when `after` is satisfied, `touch` globs do not overlap, no
 two change the same public entry, and each has its own worktree; otherwise
 sequential. Dependency-changing issues are always sequential.
 
-## 7. /work lifecycle
+## 7. /crank lifecycle
 
 ```
 harness queue next            → claimable issues (deps, overlap, dependency-change serialisation)
@@ -188,7 +188,7 @@ harness integrate feature <id>→ full checker + tests + acceptance; delete tick
 ```
 
 The main conversation is the control plane: it calls scripts and routes
-results. It does not fork `/work` to a subagent (subagents cannot spawn
+results. It does not fork `/crank` to a subagent (subagents cannot spawn
 subagents). The scheduler is code, not the LLM. The planner appears only at
 blocked, high-risk review, interface/ownership change, and integration.
 
@@ -211,12 +211,12 @@ the call's `cwd` (worktree path → lease) and `agent_id`.
 Blocked is a formal state, not a retry loop. Worker → `blocked/` with evidence.
 Planner resolves re-slicing, missing deps, ticket order, unclear contracts. If
 the block is about product behaviour, ownership, architecture direction, or the
-plan itself being wrong → back to `/grill` → user.
+plan itself being wrong → back to `/dig` → user.
 
-GC is built into `/work`: issue done → body kept until ticket integration →
+GC is built into `/crank`: issue done → body kept until ticket integration →
 deleted; ticket closed → row kept in PLAN until feature close → deleted;
 feature closed → worktrees removed, scratch cleared, ARCHITECTURE.md updated
-only if truth changed. `.harness/scratch/discovery.md` is deleted when `/plan`
+only if truth changed. `.harness/scratch/discovery.md` is deleted when `/carve`
 produces output. No completion reports, lessons-learned, postmortems, ADRs.
 
 SessionStart injects only: mode, active feature/ticket/issues, blocked issues,
@@ -228,13 +228,13 @@ its code; utility reads one evidence target.
 ## 9. Five final rulings (2026-09-10, closed)
 
 1. Ownership = logical owner + physical definition path; enforced on direct
-   data access via symbol-aware stack adapters; unknown patterns stop `/plan`.
+   data access via symbol-aware stack adapters; unknown patterns stop `/carve`.
 2. Worker Bash default-deny, exact-match allowlist only; baseline diff after
    every allowed call on worktree and main tree.
 3. One worktree per issue, environment adapter with frozen install + shared
    package-manager cache; no junctioned `node_modules`; dependency changes are
    serialised and planner-reviewed.
-4. `/work` stays in the top-level control plane with deterministic scripts;
+4. `/crank` stays in the top-level control plane with deterministic scripts;
    never forked to a planner subagent.
 5. Per-issue lease files with atomic claim; `state.json` holds only global
    low-frequency state; hooks resolve the issue from `cwd` and agent identity.
@@ -259,14 +259,14 @@ has been proven red once, then green:
 5. Cross-module deep import → checker red.
 6. Dependency cycle → checker red.
 7. Non-owner module touches another's resource → ownership red.
-8. Implementation attempted before the user ended /grill → No-Build deny.
+8. Implementation attempted before the user ended /dig → No-Build deny.
 9. New user idea taken as a decision → ARCHITECTURE.md unchanged.
 
 ## 12. Implementation order (dependency order, not phases)
 
 1. Plugin shell ✓ 2. state + hooks foundation (deny proven, plugin loads via
-`claude --plugin-dir`) 3. /grill (No-Build, scratch, user-only transition)
+`claude --plugin-dir`) 3. /dig (No-Build, scratch, user-only transition)
 4. manifest parser/validator 5. container adapters ts + python 6. scope + Bash
-enforcement + worktree + env adapter 7. /plan 8. queue 9. /work 10. ownership
+enforcement + worktree + env adapter 7. /carve 8. queue 9. /crank 10. ownership
 analyzers 11. ticket/feature integration 12. lifecycle cleanup 13. stress
 regression (§11).

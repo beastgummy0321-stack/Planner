@@ -57,7 +57,7 @@ function gateWrite() {
   const r = rel(project.root, abs);
   if (mode === 'grill') {
     if (matchesAny(r, GRILL_ALLOW)) allow();
-    deny(`No-Build gate: mode is grill, only .harness/scratch/** may be written (${r}). Only the user ends /grill by typing /plan.`);
+    deny(`No-Build gate: mode is grill, only .harness/scratch/** may be written (${r}). Only the user ends /dig by typing /carve.`);
   }
   if (mode === 'plan') {
     if (matchesAny(r, [...PLAN_ALLOW, ...(state.plan_allow || [])])) allow();
@@ -100,8 +100,8 @@ function gateAgent() {
   const sub = String(input.tool_input?.subagent_type || '');
   const wantsWorker = /worker/i.test(sub);
   const wantsPlanner = /planner/i.test(sub);
-  if (mode === 'grill' && (wantsWorker || wantsPlanner)) deny('No-Build gate: mode is grill; no planner or worker dispatch until the user types /plan');
-  if (mode === 'plan' && wantsWorker) deny('plan mode: no worker dispatch until the user types /work');
+  if (mode === 'grill' && (wantsWorker || wantsPlanner)) deny('No-Build gate: mode is grill; no planner or worker dispatch until the user types /carve');
+  if (mode === 'plan' && wantsWorker) deny('plan mode: no worker dispatch until the user types /crank');
   if (wantsWorker) {
     const pending = listLeases(project).filter((l) => !l.worktree);
     if (!pending.length) deny('worker dispatch requires a claimed issue: run harness claim <id> first');
