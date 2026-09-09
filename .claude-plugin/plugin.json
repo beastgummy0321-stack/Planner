@@ -1,6 +1,8 @@
 {
   "name": "harness",
-  "version": "1.1.0",
-  "description": "Decision → decomposition → issue execution harness. /grill (frontier + user, no build), /plan (planner: architecture manifest, feature→ticket→issue), /work (control plane: claim, worktree, scope/import/ownership gates, verify, merge, integrate, cleanup).",
-  "author": { "name": "beastgummy0321-stack" }
+  "version": "1.2.0",
+  "description": "Decision → decomposition → issue execution harness. /dig (frontier + user, no build), /carve (planner: architecture manifest, feature→ticket→issue, independent challenge), /crank (control plane: claim, worktree, scope/import/ownership gates, verify, hook-signed review, merge, smoke, integrate, recovery, cleanup).",
+  "author": {
+    "name": "beastgummy0321-stack"
+  }
 }

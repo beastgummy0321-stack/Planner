@@ -288,6 +288,35 @@ Regression scenarios added to §11: 10 self-review blindness, 11 closed-door
 building, 12 legacy adoption, 13 utility routing, 14 runtime-only defect,
 15 identical retry, 16 disposable probe — all proven red then green in `test/`.
 
+## 14. Third round (2026-09-10): control-plane holes that only real use hits
+
+An external stress pass (model reflexes, session death, greenfield, dirty repos,
+false positives, command side effects) found holes the 20 tests did not cover.
+Rule of the round: fix the pit, not the abstraction — every line below is ≤30
+lines and has a red-then-green scenario in `test/stress.test.mjs`.
+
+| failure prevented | mechanism now | machine part |
+|---|---|---|
+| greenfield deadlock: a new module cannot be declared until it exists, cannot exist until /crank | ARCHITECTURE.md is the **desired topology**; root/public existence is soft in /carve and /crank, hard at `integrate feature`; a repo with no module root is an explicit `greenfield` checker result, never "0 modules = green" | `validate.mjs` `materialized` option; `runChecker` greenfield branch (17) |
+| `git reset --hard` / `git clean` / `rm -rf` / `npm install` in the main conversation runs first, is reported after | **reflex denylist** in PreToolUse for every non-worker Bash; in work mode the main conversation may run only `harness` and read-only git (agents keep the denylist). Deliberately not a sandbox: `node -e` still reaches the baseline diff | `gate.mjs` `DESTRUCTIVE`, `READ_ONLY_GIT` (18) |
+| the side door: a module imports an unclassified `src/shared/**` and every module recouples through it | **closed world**: a module reaches local code only inside a declared module root or a legacy facade; every production file is a module, app_shell or legacy | depcruise `closed-world-local`; python `unclassified local file` (19) |
+| ownership by word: `const users = []` is red, `.from(table)` is green | ownership is a **binding**: drizzle/sqlalchemy = importing the symbol from a `definition` file; sql-table = name inside a string literal; a non-literal supabase target in managed code is red (unknown ≠ green). Regex on imports, not an AST | `check_ownership.mjs`, `check_architecture.py` (20A/B/C) |
+| a challenger that timed out counts as a review | the receipt has `completed` + `verdict`, written by **PostToolUse Agent**; `mode work` (plan→work only) refuses an unreturned challenge and a CLEAR whose `plan_hash` no longer matches | `post.mjs` `afterAgent`, `harness mode` (21, 22) |
+| the session dies after attach: the lease blocks its touch prefix forever | **recover** inside `harness mode work`: a lease from another session is an orphan — partial diff saved to `runtime/logs/*.diff`, worktree discarded, issue re-queued unchanged (no blocked fingerprint); `release` also discards the worktree | `queue.recover`, lease `session_id` (23) |
+| `finish` re-runs the privileged generator/migration | lease keeps `verify_commands` apart from the worker's `allowed_commands` | `claim`, `finish` (24) |
+| `merge --approved` is a self-assertion | **review receipt**: only a Bash call by the `harness:planner` agent running `harness review <id> approve` is hook-signed with the current `head_sha`; `merge` accepts a matching receipt, nothing else | `gate.mjs`, `queue.merge` (25) |
+| a passing smoke writes caches into the governed tree | merge smoke runs in the issue's worktree checked out at the merge commit; ticket/feature acceptance that dirties the main tree is red (detected, not prevented) | `queue.merge`, `dirtyOutsideWork` (26) |
+| "先不要 /carve" transitions | the prompt must *be* the command: `^/carve` | `harness mode` (27) |
+| an existing `check:architecture` is overwritten | composed: ours lands as `check:architecture:harness`, the checker runs both | `planTs` (28) |
+| Yarn Classic gets Berry's `--immutable`; no-lockfile installs pass silently | `.yarnrc.yml` decides; a non-reproducible install is named in the env log | `envCommands` (29) |
+| the reuse scan cannot leave the repo | utility has WebSearch/WebFetch; `find-skills` is a strategy, not a dependency | `agents/utility.md` |
+
+Deliberately not done: user approval as a hook receipt (the `/crank` prompt is
+the user's act; `deps_approved` + git log are the audit trail — restructuring
+carve→crank for it is not worth it yet); base HEAD in the retry fingerprint
+(would void every block on any merge); a TypeScript/Python AST ownership
+analyzer; an "environment contract" gate.
+
 ## 12. Implementation order (dependency order, not phases)
 
 1. Plugin shell ✓ 2. state + hooks foundation (deny proven, plugin loads via

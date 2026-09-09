@@ -82,6 +82,11 @@ test('python adapter: apply, green, prove red on deep import + ownership, scenar
   fs.writeFileSync(path.join(r, 'pkg/app/bad.py'), 'from pkg.identity.repo import get_user\n');
   c = harness(r, 'adapter', 'check'); assert.equal(c.code, 1);
   fs.rmSync(path.join(r, 'pkg/app/bad.py'));
+  // scenario 19 (python): an unclassified local file is a side door — a module may not import it
+  fs.writeFileSync(path.join(r, 'pkg/shared.py'), 'store = {}\n');
+  fs.writeFileSync(path.join(r, 'pkg/identity/side.py'), 'from pkg.shared import store\n');
+  c = harness(r, 'adapter', 'check'); assert.equal(c.code, 1); assert.match(c.out, /unclassified local file pkg\/shared\.py/);
+  fs.rmSync(path.join(r, 'pkg/identity/side.py')); fs.rmSync(path.join(r, 'pkg/shared.py'));
   assert.equal(harness(r, 'adapter', 'check').code, 0);
 });
 
@@ -108,6 +113,12 @@ test('ts adapter: dependency-cruiser wired, prove red, scenario 2/5/6/7', { time
   fs.writeFileSync(path.join(r, 'src/modules/identity/leak.ts'), "import { payments } from '../billing/schema';\nexport const p = payments;\n");
   c = harness(r, 'adapter', 'check'); assert.equal(c.code, 1); assert.match(c.out, /payments owned by billing|billing-public-entry-only/);
   fs.rmSync(path.join(r, 'src/modules/identity/leak.ts'));
+  // scenario 19 (ts): an unclassified local file is a side door — a module may not import it
+  fs.mkdirSync(path.join(r, 'src/shared'), { recursive: true });
+  fs.writeFileSync(path.join(r, 'src/shared/store.ts'), 'export const store = new Map();\n');
+  fs.writeFileSync(path.join(r, 'src/modules/billing/side.ts'), "import { store } from '../../shared/store';\nexport const s = store;\n");
+  c = harness(r, 'adapter', 'check'); assert.equal(c.code, 1); assert.match(c.out, /closed-world-local/);
+  fs.rmSync(path.join(r, 'src/modules/billing/side.ts')); fs.rmSync(path.join(r, 'src/shared'), { recursive: true });
   assert.equal(harness(r, 'adapter', 'check').code, 0);
   // git state for the lifecycle test below
   g(r, 'add', '-A'); g(r, 'commit', '-qm', 'adapter');

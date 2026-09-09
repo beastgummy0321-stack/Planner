@@ -38,8 +38,8 @@ export function hook(name, input, cwd) {
   return { code: r.status, out: r.stdout, err: r.stderr, json, denied: json?.hookSpecificOutput?.permissionDecision === 'deny', reason: json?.hookSpecificOutput?.permissionDecisionReason || '' };
 }
 
-export function userTyped(cwd, prompt) {
-  return hook('prompt', { cwd, prompt, session_id: 's1' }, cwd);
+export function userTyped(cwd, prompt, session = 's1') {
+  return hook('prompt', { cwd, prompt, session_id: session }, cwd);
 }
 
 export function setMode(cwd, m, { challenge = true } = {}) {
@@ -49,8 +49,13 @@ export function setMode(cwd, m, { challenge = true } = {}) {
   const r = harness(cwd, 'mode', m);
   if (r.code !== 0) throw new Error(r.err);
 }
-export function challengerDispatched(cwd, prompt = 'Challenge this draft: contradiction, missing assumption, simpler route, execution trap.') {
-  return hook('gate', { cwd, tool_name: 'Agent', tool_input: { subagent_type: 'harness:challenger', prompt }, tool_use_id: 'ch1' }, cwd);
+// dispatch through the PreToolUse gate and, unless told otherwise, return through PostToolUse with a verdict — a dispatch alone is not a review
+export function challengerDispatched(cwd, prompt = 'Challenge this draft: contradiction, missing assumption, simpler route, execution trap.', { complete = true, verdict = 'CLEAR' } = {}) {
+  const tool_input = { subagent_type: 'harness:challenger', prompt };
+  const r = hook('gate', { cwd, tool_name: 'Agent', tool_input, tool_use_id: 'ch1' }, cwd);
+  if (complete && !r.denied) hook('post', { cwd, tool_name: 'Agent', tool_input, tool_use_id: 'ch1', tool_response: `${verdict}
+1. Contradiction: none.` }, cwd);
+  return r;
 }
 
 export function writeIssue(cwd, dir, data, body = '# Objective\nx\n# Done\ny\n# Verify\nz\n# Blocked if\nw\n') {

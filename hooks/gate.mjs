@@ -2,7 +2,7 @@
 import path from 'node:path';
 import { appendFileSync as fsAppend } from 'node:fs';
 import {
-  findProject, readState, findLeaseByCwd, findLeaseByAgent, listLeases, writeLease, worktreeRoot,
+  findProject, readState, findLeaseByCwd, findLeaseByAgent, listLeases, writeLease, readLease, worktreeRoot,
   isInside, rel, matchesAny, norm, snapshot, writeJsonAtomic, readStdinJson, deny, allow, planHash,
 } from '../lib/core.mjs';
 
@@ -10,6 +10,15 @@ const WRITE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
 const PLAN_ALLOW = ['ARCHITECTURE.md', '.work/**', '.harness/**'];
 const WORK_MAIN_ALLOW = ['.work/**', '.harness/**'];
 const GRILL_ALLOW = ['.harness/scratch/**'];
+// Commands that destroy work before any PostToolUse diff can see it. ponytail: a reflex denylist, not a sandbox —
+// `node -e "fs.rmSync(...)"` still gets through; the baseline diff catches that after the fact.
+const DESTRUCTIVE = [
+  /\bgit\s+(reset\s+--hard|clean\b|checkout\s+(--|\.)|restore\b|stash\s+drop|push\s+.*(--force|-f\b)|branch\s+-D|worktree\s+remove\s+.*--force)/,
+  /\brm\s+(-\w*r|-\w*f)/, /\bRemove-Item\b.*-Recurse/i, /\brmdir\s+\/s/i, /\bdel\s+\/[sq]/i,
+  /\b(npm|pnpm|yarn|pip|pip3|uv|poetry)\s+(install|i|add|uninstall|remove|rm|update|upgrade)\b/, // packages enter through /carve approval, into a worker's privileged list
+];
+const READ_ONLY_GIT = /^git\s+(status|log|diff|show|branch|worktree\s+list|rev-parse|ls-files|blame)\b/;
+
 
 const input = readStdinJson();
 const cwd = input.cwd || process.cwd();
@@ -70,12 +79,16 @@ function gateWrite() {
   allow();
 }
 
+function harnessCli(cmd, subs) {
+  const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT ? norm(process.env.CLAUDE_PLUGIN_ROOT) : null;
+  const re = new RegExp(`^node\\s+"?${pluginRoot ? escapeRe(pluginRoot) : '\\S*'}/bin/harness\\.mjs"?\\s+(${subs})\\b`, 'i');
+  return re.test(cmd.replace(/\\/g, '/'));
+}
+
 function gateBash() {
   const cmd = String(input.tool_input?.command || '').trim();
   if (isWorker) {
-    const pluginRoot = process.env.CLAUDE_PLUGIN_ROOT ? norm(process.env.CLAUDE_PLUGIN_ROOT) : null;
-    const fixed = pluginRoot ? new RegExp(`^node\\s+"?${escapeRe(pluginRoot)}/bin/harness\\.mjs"?\\s+(attach|status|env)\\b`, 'i') : null;
-    const harnessCall = fixed && fixed.test(cmd.replace(/\\/g, '/'));
+    const harnessCall = harnessCli(cmd, 'attach|status|env');
     if (harnessCall) {
       const m = /attach\s+(\S+)/.exec(cmd);
       if (m && input.agent_id) {
@@ -92,6 +105,18 @@ function gateBash() {
     baseline();
     allow();
   }
+  if (harnessCli(cmd, '\\w[\\w-]*')) {
+    // planner review receipt: hook-written, so the control plane cannot approve on the planner's behalf
+    const m = /\breview\s+(\S+)\s+approve\b/.exec(cmd);
+    if (m && /planner/i.test(agentType)) {
+      const l = readLease(project, m[1]);
+      if (l?.finished) writeJsonAtomic(path.join(project.harness, 'runtime', 'reviews', `${m[1]}.json`), { issue: m[1], verdict: 'approve', head_sha: l.head_sha, agent_id: input.agent_id || null, agent_type: agentType, at: Date.now() });
+    }
+    allow();
+  }
+  const hit = DESTRUCTIVE.find((re) => re.test(cmd));
+  if (hit) deny(`destructive command denied before it runs (${hit}). The governed tree is not a scratchpad: probes go under .harness/scratch/probes, packages through /carve, resets through harness.`);
+  if (mode === 'work' && !agentType && !READ_ONLY_GIT.test(cmd)) deny('work mode: the main conversation runs only harness commands and read-only git; workers implement, utility collects evidence');
   baseline();
   allow();
 }
@@ -107,8 +132,8 @@ function gateAgent() {
     if (mode !== 'plan') deny('the Independent Challenge runs in plan mode on a finished draft');
     const prompt = String(input.tool_input?.prompt || '');
     if (/rationale|reasoning|why I chose|my thinking/i.test(prompt)) deny('the challenger must not receive the planner\'s reasoning or rationale — only the confirmed outcome, ARCHITECTURE.md, PLAN, tickets, issues');
-    // hook-written record: the model cannot fake that a challenge was dispatched this round
-    writeJsonAtomic(path.join(project.harness, 'runtime', 'challenge.json'), { dispatched_at: Date.now(), plan_hash: planHash(project.root), tool_use_id: input.tool_use_id || null });
+    // hook-written record: the model cannot fake that a challenge was dispatched this round; PostToolUse marks it completed
+    writeJsonAtomic(path.join(project.harness, 'runtime', 'challenge.json'), { dispatched_at: Date.now(), completed: false, verdict: null, plan_hash: planHash(project.root), tool_use_id: input.tool_use_id || null });
   }
   if (wantsWorker) {
     const pending = listLeases(project).filter((l) => !l.worktree);

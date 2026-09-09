@@ -2,7 +2,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { tmpRepo, harness, hook, userTyped, setMode, writeIssue, ISSUE, writeManifest, MANIFEST, addWorktree } from './helpers.mjs';
+import { tmpRepo, harness, hook, userTyped, setMode, challengerDispatched, writeIssue, ISSUE, writeManifest, MANIFEST, addWorktree } from './helpers.mjs';
 
 const W = (cwd, file, extra = {}) => hook('gate', { cwd, tool_name: 'Write', tool_input: { file_path: file, content: 'x' }, tool_use_id: 't1', ...extra }, cwd);
 const B = (cwd, command, extra = {}) => hook('gate', { cwd, tool_name: 'Bash', tool_input: { command }, tool_use_id: extra.tool_use_id || 'b1', ...extra }, cwd);
@@ -46,7 +46,7 @@ test('only the user ends grill: mode refuses without a matching user prompt', ()
   assert.equal(noCh.code, 1); assert.match(noCh.err, /Independent Challenge/);
   const anchored = hook('gate', { cwd: r, tool_name: 'Agent', tool_input: { subagent_type: 'harness:challenger', prompt: 'Here is my reasoning and rationale for the plan…' } }, r);
   assert.equal(anchored.denied, true); // reviewer must not read the author's defence
-  assert.equal(hook('gate', { cwd: r, tool_name: 'Agent', tool_input: { subagent_type: 'harness:challenger', prompt: 'Challenge this draft.' } }, r).denied, false);
+  assert.equal(challengerDispatched(r, 'Challenge this draft.').denied, false);
   userTyped(r, '/harness:crank');
   assert.equal(harness(r, 'mode', 'work').code, 0);
   // a new planning round invalidates the old challenge
@@ -145,7 +145,7 @@ test('scenario 9: a user idea in grill never reaches ARCHITECTURE.md; session ho
   assert.match(s.out, /mode=grill/); assert.match(s.out, /only the user ends \/dig/);
 });
 
-test('review: planner issues cannot be merged without --approved', () => {
+test('review: planner issues cannot be merged without a hook-signed review receipt', () => {
   const r = tmpRepo(); harness(r, 'init'); writeManifest(r); setMode(r, 'plan'); setMode(r, 'work');
   writeIssue(r, 'ready', ISSUE({ interface_change: true, review: 'planner' }));
   assert.equal(harness(r, 'claim', 'F01-T01-I01').code, 0);

@@ -4,7 +4,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {
   MODES, QUEUE_DIRS, findProject, readState, writeState, readJson, writeJsonAtomic,
-  readLease, writeLease, listLeases, leasePath, tryGit, git, norm, worktreeRoot, isInside, parseFrontmatter,
+  readLease, writeLease, listLeases, leasePath, tryGit, git, norm, worktreeRoot, isInside, parseFrontmatter, planHash,
 } from '../lib/core.mjs';
 import { readManifest, validateIssueFile, validateIssueText, validateTicketFile } from '../lib/validate.mjs';
 import { issueFingerprint } from '../lib/core.mjs';
@@ -15,7 +15,7 @@ import * as Q from '../lib/queue.mjs';
 const [cmd, ...args] = process.argv.slice(2);
 const cwd = process.cwd();
 
-const commands = { init, status, mode, validate, claim, attach, release, adapter, env, queue: queueCmd, finish, merge, block, diff, integrate, close, 'plan-sync': planSync, help };
+const commands = { init, status, mode, validate, claim, attach, release, adapter, env, queue: queueCmd, finish, review, merge, block, diff, integrate, close, 'plan-sync': planSync, help };
 try {
   await (commands[cmd] || help)(...args);
 } catch (e) {
@@ -40,7 +40,8 @@ async function help() {
   env                  (worker, inside worktree) frozen dependency install
   queue next           claimable issues (deps done, no overlap, dependency changes alone)
   finish <id>          scope post-diff · checker · ownership · verify · typecheck/build → green or blocked/
-  merge <id> [--approved]   merge the issue branch into base, integration gate, → done/
+  review <id> approve  (planner agent only) record the review receipt for the current worktree head
+  merge <id>           merge the issue branch into base, integration gate, smoke in the worktree, → done/
   block <id> "<reason>"     doing/ → blocked/ with reason; worktree discarded
   diff <id>            diff of the issue branch against its base
   integrate ticket <F01-T01> | feature <F01>
@@ -73,7 +74,7 @@ async function mode(next) {
   const state = readState(p);
   const last = readJson(path.join(p.harness, 'runtime', 'last-prompt.json'), null);
   const skill = { grill: 'dig', plan: 'carve', work: 'crank' }[next];
-  const re = new RegExp(`(^|\\s)/(harness:)?${skill}(\\s|$)`, 'i');
+  const re = new RegExp(`^\\s*/(harness:)?${skill}(\\s|$)`, 'i'); // the prompt IS the command; "先不要 /carve" is not
   if (!last || !re.test(last.prompt)) {
     die(`refused: the last user prompt did not invoke /${skill}. Only the user changes mode by typing /${skill}; a model may not self-approve.`);
   }
@@ -82,9 +83,17 @@ async function mode(next) {
   if (next === 'work') {
     const { errors } = readManifest(p.root);
     if (errors.length) die(`refused: ARCHITECTURE.md invalid:\n  ${errors.join('\n  ')}`);
-    // the planner is never the only validator of its own assumptions: an independent challenger must have been dispatched this planning round
+    // the planner is never the only validator of its own assumptions: an independent challenger must have been dispatched
+    // this planning round AND come back; a CLEAR covers exactly the plan it read
+    // (gates the plan → work transition only; once in work mode the queue itself rewrites .work/, and /crank re-runs this command to recover)
     const ch = readJson(challengeFile, null);
     if (!ch) die('refused: no Independent Challenge this planning round. In /carve, dispatch Agent(subagent_type: "harness:challenger") on the finished draft (one round), then /crank.');
+    if (state.mode !== 'work') {
+      if (!ch.completed) die('refused: the Independent Challenge was dispatched but never returned (timeout/crash?). A dispatch is not a review; dispatch it again.');
+      if (ch.verdict === 'CLEAR' && ch.plan_hash !== planHash(p.root)) die('refused: the plan changed after the challenger said CLEAR; its review covers the old draft. Dispatch the challenger again.');
+    }
+    // orphan leases from a dead session: save partial work, re-queue, free the touch prefix
+    for (const r of Q.recover(p, last.session_id)) out(`recovered ${r.issue}: session ${r.session || '?'} is gone; re-queued${r.log ? ', partial diff saved to ' + r.log : ''}`);
   }
   if (next === 'plan') {
     // a new planning round: the previous challenge no longer covers it; disposable probes never survive into planning
@@ -145,9 +154,11 @@ async function claim(id) {
   }
   // atomic claim: rename fails if another process moved it first
   try { fs.renameSync(issueFile(p, 'ready', id), issueFile(p, 'doing', id)); } catch (e) { die(`claim failed (already claimed?): ${e.message}`); }
+  const session = readJson(path.join(p.harness, 'runtime', 'last-prompt.json'), null)?.session_id || null;
   const lease = {
-    issue: id, claimed_at: Date.now(), agent_id: null, worktree: null, branch: null, base_sha: null,
-    touch: issue.touch, do_not_touch: issue.do_not_touch, allowed_commands: [...issue.verify, ...issue.privileged],
+    issue: id, claimed_at: Date.now(), session_id: session, agent_id: null, worktree: null, branch: null, base_sha: null,
+    touch: issue.touch, do_not_touch: issue.do_not_touch,
+    verify_commands: issue.verify, allowed_commands: [...issue.verify, ...issue.privileged], // worker may run both; finish re-runs only verify
     review: issue.review, interface_change: issue.interface_change, violations: [],
   };
   if (fs.existsSync(leasePath(p, id))) die(`lease for ${id} already exists`);
@@ -194,7 +205,7 @@ async function release(id) {
   id || die('release <id>');
   if (findIssue(p, id) !== 'doing') die(`${id} is not in doing/`);
   fs.renameSync(issueFile(p, 'doing', id), issueFile(p, 'ready', id));
-  try { fs.unlinkSync(leasePath(p, id)); } catch {}
+  Q.discardLease(p, id); // lease, worktree and branch go together
   out(`released ${id}: doing/ → ready/`);
 }
 
@@ -220,7 +231,7 @@ ${r.output}`);
     if (!r.ok) process.exit(1);
   } else if (sub === 'check') {
     const r = runChecker(p.root);
-    out(r.ok ? `green (${r.command})` : r.output);
+    out(r.ok ? (r.greenfield ? r.output : `green (${r.command})`) : r.output);
     if (!r.ok) process.exit(1);
   } else if (sub === 'prove') {
     const r = proveChecker(p.root);
@@ -248,9 +259,18 @@ async function finish(id) {
   out(JSON.stringify(r, null, 2));
   if (!r.ok) process.exit(1);
 }
-async function merge(id, flag) {
-  const p = project(); id || die('merge <id> [--approved]');
-  const r = Q.merge(p, id, { approved: flag === '--approved' });
+async function review(id, verdict) {
+  const p = project(); id || die('review <id> approve');
+  if (verdict !== 'approve') die('review <id> approve — a block goes through harness block <id> "<reason>"');
+  // the receipt itself is written by the PreToolUse hook when the planner agent runs this command; here we only confirm it
+  const rc = Q.reviewReceipt(p, id);
+  const lease = readLease(p, id) || die(`no lease for ${id}`);
+  if (!rc || rc.head_sha !== lease.head_sha) die(`no review receipt for ${id} at ${lease.head_sha?.slice(0, 8)}: this command counts only when the harness:planner agent runs it (the hook records it); the control plane cannot approve`);
+  out(`review recorded: ${id} approve at ${rc.head_sha.slice(0, 8)} by ${rc.agent_type}`);
+}
+async function merge(id) {
+  const p = project(); id || die('merge <id>');
+  const r = Q.merge(p, id);
   out(JSON.stringify(r, null, 2));
   if (!r.ok) process.exit(1);
 }

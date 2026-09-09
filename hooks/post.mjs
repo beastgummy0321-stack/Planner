@@ -3,7 +3,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {
   findProject, readState, writeState, readLease, writeLease, findLeaseByCwd, findLeaseByAgent,
-  rel, matchesAny, norm, snapshot, changedBetween, readJson, readStdinJson,
+  rel, matchesAny, norm, snapshot, changedBetween, readJson, readStdinJson, writeJsonAtomic,
 } from '../lib/core.mjs';
 import { validateManifestFile, validateIssueFile, validateTicketFile } from '../lib/validate.mjs';
 
@@ -15,7 +15,19 @@ if (!project) process.exit(0);
 const tool = input.tool_name;
 if (tool === 'Bash') afterBash();
 else if (['Write', 'Edit', 'MultiEdit'].includes(tool)) afterWrite();
+else if (tool === 'Agent') afterAgent();
 process.exit(0);
+
+// The challenge counts only when the challenger came back: a dispatch that timed out or crashed is not a review.
+function afterAgent() {
+  if (!/challenger/i.test(String(input.tool_input?.subagent_type || ''))) return;
+  const file = path.join(project.harness, 'runtime', 'challenge.json');
+  const ch = readJson(file, null);
+  if (!ch) return;
+  const text = typeof input.tool_response === 'string' ? input.tool_response : JSON.stringify(input.tool_response ?? '');
+  const verdict = (/\b(CLEAR|CHALLENGE)\b/.exec(text) || [])[1] || null;
+  writeJsonAtomic(file, { ...ch, completed: true, verdict, completed_at: Date.now() });
+}
 
 function fail(msg) { process.stderr.write(msg + '\n'); process.exit(2); }
 

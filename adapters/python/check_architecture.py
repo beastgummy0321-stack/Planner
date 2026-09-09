@@ -8,7 +8,10 @@ without the plugin. Enforces, from the manifest's JSON frontmatter:
   3. no dependency cycles between modules (from actual imports)
   4. no module imports the app shell
   5. ownership: a non-owner module does not access another module's resource
-     (supabase-table: .table("x") / .from_("x") / .rpc("x"); sqlalchemy-model / sql-table: symbol import or use)
+     (supabase-table: .table("x") / .from_("x") / .rpc("x") literal targets, a non-literal target in managed code is red;
+      sqlalchemy-model: importing the symbol from a definition file; sql-table: the name inside a string literal)
+  6. closed world: a managed module imports local code only from a declared module, app shell excluded, or a legacy facade
+     (an unclassified shared/utils file is the side door that recouples every module)
 Exit code = number of violations (0 = green). Prints one violation per line as path:line: message.
 """
 import ast
@@ -126,6 +129,10 @@ def main():
                     other = module_of(tpath, modules)
                     if globmatch(tpath, app_shell) and me is not None:
                         violations.append(f"{path}:{node.lineno}: module {me} imports the app shell ({tpath})")
+                        continue
+                    if other is None and me is not None and tpath not in facades:
+                        violations.append(f"{path}:{node.lineno}: module {me} imports unclassified local file {tpath}; declare it in a module, app_shell or legacy")
+                        continue
                     if other is None or other == me:
                         continue
                     if me is None:
@@ -141,25 +148,45 @@ def main():
 
         # ownership
         src = open(abspath, encoding="utf-8").read()
+        who = me or "app shell"
         for rname, r in resources.items():
             owner = r["owner"]
             if me == owner:
                 continue
             sym = r["symbol"]
             kind = r["kind"]
+            definition = r.get("definition", [])
             if kind == "supabase-table":
                 pat = re.compile(r"\.(?:table|from_|rpc)\(\s*['\"]" + re.escape(sym) + r"['\"]")
-            elif kind in ("sqlalchemy-model", "sql-table", "drizzle-table"):
-                pat = re.compile(r"(?<![\w.])" + re.escape(sym) + r"(?![\w])")
+                for i, line in enumerate(src.splitlines(), 1):
+                    if pat.search(line):
+                        violations.append(f"{path}:{i}: {who} accesses resource {rname} owned by {owner}")
+            elif kind == "sqlalchemy-model":
+                # binding, not text: `from app.models import User` where app/models.py is a definition file.
+                # ponytail: `import app.models` + `app.models.User` attribute access is not followed.
+                if globmatch(path, definition):
+                    continue
+                for node in ast.walk(tree):
+                    if isinstance(node, ast.ImportFrom) and any(a.name == sym for a in node.names):
+                        target = resolve_target(dotted_to_path(node.module or "", node.level, path))
+                        if target and globmatch(target, definition):
+                            violations.append(f"{path}:{node.lineno}: {who} accesses resource {rname} owned by {owner} (imports {sym} from {target})")
+            elif kind == "sql-table":
+                if globmatch(path, definition):
+                    continue
+                pat = re.compile(r"['\"][^'\"\n]*\b" + re.escape(sym) + r"\b[^'\"\n]*['\"]")
+                for i, line in enumerate(src.splitlines(), 1):
+                    if pat.search(line):
+                        violations.append(f"{path}:{i}: {who} accesses resource {rname} owned by {owner} (sql literal)")
             else:
                 violations.append(f"ARCHITECTURE.md:0: resource {rname}: unsupported ownership adapter for kind {kind}")
-                continue
-            if kind != "supabase-table" and globmatch(path, r.get("definition", [])):
-                continue
+        # dynamic supabase target in managed code: ownership unknown = red, never silently green
+        if me is not None and any(r["kind"] == "supabase-table" for r in resources.values()):
+            dyn = re.compile(r"\.(table|from_|rpc)\(\s*(?!['\"])[^)\s]")
             for i, line in enumerate(src.splitlines(), 1):
-                if pat.search(line):
-                    who = me or "app shell"
-                    violations.append(f"{path}:{i}: {who} accesses resource {rname} owned by {owner}")
+                m = dyn.search(line)
+                if m:
+                    violations.append(f"{path}:{i}: {who} calls .{m.group(1)}() with a non-literal target — ownership unknown; use a string literal")
 
     # cycles from actual edges
     def find_cycles():
