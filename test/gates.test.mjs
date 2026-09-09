@@ -132,7 +132,7 @@ test('scenario 9: a user idea in grill never reaches ARCHITECTURE.md; session ho
   const d = W(r, 'ARCHITECTURE.md');
   assert.equal(d.denied, true); assert.match(d.reason, /No-Build/);
   const s = hook('session', { cwd: r, session_start_reason: 'startup' }, r);
-  assert.match(s.out, /mode=grill/); assert.match(s.out, /Only the user ends \/grill/);
+  assert.match(s.out, /mode=grill/); assert.match(s.out, /only the user ends \/grill/);
 });
 
 test('review: planner issues cannot be merged without --approved', () => {
