@@ -41,7 +41,17 @@ test('only the user ends grill: mode refuses without a matching user prompt', ()
   assert.equal(harness(r, 'mode', 'plan').code, 0);
   userTyped(r, '/harness:crank');
   writeManifest(r);
+  // scenario 10: the planner cannot be the only validator of its own draft — no challenge, no /crank
+  const noCh = harness(r, 'mode', 'work');
+  assert.equal(noCh.code, 1); assert.match(noCh.err, /Independent Challenge/);
+  const anchored = hook('gate', { cwd: r, tool_name: 'Agent', tool_input: { subagent_type: 'harness:challenger', prompt: 'Here is my reasoning and rationale for the plan…' } }, r);
+  assert.equal(anchored.denied, true); // reviewer must not read the author's defence
+  assert.equal(hook('gate', { cwd: r, tool_name: 'Agent', tool_input: { subagent_type: 'harness:challenger', prompt: 'Challenge this draft.' } }, r).denied, false);
+  userTyped(r, '/harness:crank');
   assert.equal(harness(r, 'mode', 'work').code, 0);
+  // a new planning round invalidates the old challenge
+  userTyped(r, '/carve'); assert.equal(harness(r, 'mode', 'plan').code, 0);
+  userTyped(r, '/crank'); assert.equal(harness(r, 'mode', 'work').code, 1);
 });
 
 test('grill Bash that changes source is a recorded violation and blocks mode change', () => {

@@ -84,11 +84,15 @@ def main():
     modules = manifest["modules"]
     app_shell = manifest.get("app_shell", [])
     resources = manifest.get("resources", {})
+    legacy = manifest.get("legacy", [])
+    facades = set(manifest.get("legacy_facades", []))
     violations = []
     edges = {name: set() for name in modules}
 
     for abspath in py_files():
         path = rel(abspath)
+        if globmatch(path, legacy):
+            continue  # legacy is not governed; it may shrink, never grow (issue validation), and is reached only via facades
         me = module_of(path, modules)
         try:
             tree = ast.parse(open(abspath, encoding="utf-8").read(), filename=path)
@@ -116,6 +120,9 @@ def main():
                         if sub:
                             candidates.append(sub)
                 for tpath in candidates:
+                    if me is not None and globmatch(tpath, legacy) and tpath not in facades:
+                        violations.append(f"{path}:{node.lineno}: managed module {me} imports legacy internals ({tpath}); use a declared facade")
+                        continue
                     other = module_of(tpath, modules)
                     if globmatch(tpath, app_shell) and me is not None:
                         violations.append(f"{path}:{node.lineno}: module {me} imports the app shell ({tpath})")

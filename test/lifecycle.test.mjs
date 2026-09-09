@@ -162,9 +162,14 @@ function lifecycle(r) {
   assert.match(fs.readFileSync(path.join(r, '.work/blocked/F01-T01-I02.md'), 'utf8'), /## Blocked[\s\S]*container checker/);
   assert.ok(!fs.existsSync(wt2), 'worktree discarded');
   assert.ok(!fs.existsSync(path.join(r, '.harness/runtime/leases/F01-T01-I02.json')));
-  // planner re-slices: move back to ready by rewriting the issue (simulated), redo cleanly
+  // scenario 15: moving the unchanged issue back to ready is an identical retry → claim refuses
   fs.rmSync(path.join(r, '.work/blocked/F01-T01-I02.md'));
   writeIssue(r, 'ready', ISSUE({ id: 'F01-T01-I02', after: ['F01-T01-I01'], touch: ['src/modules/identity/**'], do_not_touch: [], verify: ['npm test'] }));
+  const retry = harness(r, 'claim', 'F01-T01-I02');
+  assert.equal(retry.code, 1); assert.match(retry.err, /identical retry refused/);
+  // the planner changes the issue → allowed again
+  writeIssue(r, 'ready', ISSUE({ id: 'F01-T01-I02', after: ['F01-T01-I01'], touch: ['src/modules/identity/**'], do_not_touch: [], verify: ['npm test'] }),
+    '# Objective\nadd read2 via the public entry only\n# Done\ny\n# Verify\nnpm test\n# Blocked if\nw\n');
   assert.equal(harness(r, 'claim', 'F01-T01-I02').code, 0);
   const wt3 = path.join(r, '.claude/worktrees/agent-3');
   g(r, 'worktree', 'add', '-q', '-b', 'worktree-agent-3', wt3);

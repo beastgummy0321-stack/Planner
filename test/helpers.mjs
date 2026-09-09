@@ -42,10 +42,15 @@ export function userTyped(cwd, prompt) {
   return hook('prompt', { cwd, prompt, session_id: 's1' }, cwd);
 }
 
-export function setMode(cwd, m) {
+export function setMode(cwd, m, { challenge = true } = {}) {
+  // entering work requires an Independent Challenge dispatched during plan mode; simulate the dispatch through the real gate hook
+  if (m === 'work' && challenge) challengerDispatched(cwd);
   userTyped(cwd, `/${{ grill: 'dig', plan: 'carve', work: 'crank' }[m]}`);
   const r = harness(cwd, 'mode', m);
   if (r.code !== 0) throw new Error(r.err);
+}
+export function challengerDispatched(cwd, prompt = 'Challenge this draft: contradiction, missing assumption, simpler route, execution trap.') {
+  return hook('gate', { cwd, tool_name: 'Agent', tool_input: { subagent_type: 'harness:challenger', prompt }, tool_use_id: 'ch1' }, cwd);
 }
 
 export function writeIssue(cwd, dir, data, body = '# Objective\nx\n# Done\ny\n# Verify\nz\n# Blocked if\nw\n') {

@@ -6,7 +6,8 @@ import {
   MODES, QUEUE_DIRS, findProject, readState, writeState, readJson, writeJsonAtomic,
   readLease, writeLease, listLeases, leasePath, tryGit, git, norm, worktreeRoot, isInside, parseFrontmatter,
 } from '../lib/core.mjs';
-import { readManifest, validateIssueFile, validateIssueText } from '../lib/validate.mjs';
+import { readManifest, validateIssueFile, validateIssueText, validateTicketFile } from '../lib/validate.mjs';
+import { issueFingerprint } from '../lib/core.mjs';
 import { statusText, queue } from '../lib/status.mjs';
 import { planAdapter, applyAdapter, runChecker, proveChecker, setupEnv, detectStack } from '../lib/adapters.mjs';
 import * as Q from '../lib/queue.mjs';
@@ -77,12 +78,18 @@ async function mode(next) {
     die(`refused: the last user prompt did not invoke /${skill}. Only the user changes mode by typing /${skill}; a model may not self-approve.`);
   }
   if (state.violations?.length) die(`refused: unresolved violations in main tree: ${state.violations.map((v) => v.file).join(', ')}. Revert them first.`);
+  const challengeFile = path.join(p.harness, 'runtime', 'challenge.json');
   if (next === 'work') {
     const { errors } = readManifest(p.root);
     if (errors.length) die(`refused: ARCHITECTURE.md invalid:\n  ${errors.join('\n  ')}`);
+    // the planner is never the only validator of its own assumptions: an independent challenger must have been dispatched this planning round
+    const ch = readJson(challengeFile, null);
+    if (!ch) die('refused: no Independent Challenge this planning round. In /carve, dispatch Agent(subagent_type: "harness:challenger") on the finished draft (one round), then /crank.');
   }
-  if (next === 'plan' && state.mode === 'grill') {
-    // discovery scratch survives until /carve produces output; the plan skill deletes it.
+  if (next === 'plan') {
+    // a new planning round: the previous challenge no longer covers it; disposable probes never survive into planning
+    try { fs.unlinkSync(challengeFile); } catch {}
+    fs.rmSync(path.join(p.harness, 'scratch', 'probes'), { recursive: true, force: true });
   }
   state.mode = next;
   writeState(p, state);
@@ -93,11 +100,15 @@ async function validate() {
   const p = project();
   const { errors } = readManifest(p.root);
   const all = errors.map((e) => `ARCHITECTURE.md: ${e}`);
+  const tdir = path.join(p.root, '.work', 'tickets');
+  if (fs.existsSync(tdir)) for (const f of fs.readdirSync(tdir).filter((f) => f.endsWith('.md'))) {
+    for (const e of validateTicketFile(path.join(tdir, f))) all.push(`.work/tickets/${f}: ${e}`);
+  }
   for (const d of QUEUE_DIRS) {
     const dir = path.join(p.root, '.work', d);
     if (!fs.existsSync(dir)) continue;
     for (const f of fs.readdirSync(dir).filter((f) => f.endsWith('.md'))) {
-      for (const e of validateIssueFile(path.join(dir, f))) all.push(`.work/${d}/${f}: ${e}`);
+      for (const e of validateIssueFile(path.join(dir, f), p.root)) all.push(`.work/${d}/${f}: ${e}`);
     }
   }
   if (all.length) { out(all.join('\n')); process.exit(1); }
@@ -118,8 +129,14 @@ async function claim(id) {
   const where = findIssue(p, id);
   if (where !== 'ready') die(`issue ${id} is not in ready/ (found: ${where || 'nowhere'})`);
   const text = fs.readFileSync(issueFile(p, 'ready', id), 'utf8');
-  const { issue, errors } = validateIssueText(text);
+  const { issue, errors } = validateIssueText(text, { manifest: readManifest(p.root).manifest, ticket: Q.readTicket(p, id.slice(0, 7))?.data });
   if (errors.length) die(`issue invalid:\n  ${errors.join('\n  ')}`);
+  // no identical retry: a blocked issue re-enters only after the planner changed it, its dependencies, or the architecture
+  const prev = readJson(path.join(p.harness, 'runtime', 'blocked', `${id}.json`), null);
+  if (prev) {
+    const manifestText = fs.existsSync(path.join(p.root, 'ARCHITECTURE.md')) ? fs.readFileSync(path.join(p.root, 'ARCHITECTURE.md'), 'utf8') : '';
+    if (issueFingerprint(text, manifestText) === prev.fingerprint) die(`identical retry refused: ${id} was blocked (${prev.reason}) and neither the issue, its dependencies nor ARCHITECTURE.md changed since. Re-dispatching the same input to another worker only burns tokens; the planner must change something first.`);
+  }
   const q = queue(p.root);
   const missing = (issue.after || []).filter((a) => !Q.isDone(p, a));
   if (missing.length) die(`dependencies not done: ${missing.join(', ')}`);

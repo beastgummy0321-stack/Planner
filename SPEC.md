@@ -262,6 +262,32 @@ has been proven red once, then green:
 8. Implementation attempted before the user ended /dig → No-Build deny.
 9. New user idea taken as a decision → ARCHITECTURE.md unchanged.
 
+## 13. Second round (2026-09-10): what the old harness protected, redesigned
+
+Rule of the round: an old mechanism is not a compatibility requirement; the
+failure it prevented is. Each entry names the failure and the new, smaller line.
+
+| failure prevented | mechanism now | machine part |
+|---|---|---|
+| the planner is the only validator of its own assumptions | **Independent Challenge**: a fresh planner-class `harness:challenger` (read-only) gets the confirmed outcome + artefacts, never the planner's reasoning; answers CLEAR/CHALLENGE on contradiction, missing assumption, simpler route, execution trap; no veto, one round | gate records the challenger dispatch (`runtime/challenge.json`) and denies a prompt carrying rationale; `mode work` refuses without a record; `mode plan` clears it |
+| building what the repo, a skill, the platform or a package already does | **Reuse gate** in /dig and /carve: utility runs the reuse scan (repo → installed skills/plugins/MCP → skill ecosystem → platform primitive → installed dep → maintained package → reference implementation); new packages are approved once by the user | issues touching dependency files must declare `deps`; each must be in the ticket's `deps_approved` |
+| a dirty existing repo can never start under the container rules | **Managed / legacy surface**: manifest `legacy` globs + `legacy_facades`; legacy is ungoverned and may shrink; managed code reaches it only via facades; new capability never lands in legacy | checkers (depcruise rule, python AST) flag managed→legacy internals; validation rejects `touch` into legacy unless `legacy_migration: true` + planner review; module roots inside legacy rejected; no tolerance baselines |
+| unit/typecheck/build green but the app does not run | **Acceptance contract** per ticket: `verify` (machine) · `runtime` (boot/request/click, only what machine gates cannot see) · `human` (only what needs a person); manifest `verify.smoke` | `merge` runs smoke on the merged base and rolls back on red; `integrate ticket` runs runtime after machine; human items are surfaced, never auto-closed; feature integration runs smoke |
+| expensive models burn tokens on evidence | **Evidence router**: utility has fixed jobs — reuse scan, log triage, repo inventory, runtime acceptance, mechanical verification | red gates with long output write `runtime/logs/*.log`; the blocked body keeps an 8-line tail and tells the control plane to triage with utility first |
+| re-dispatching the same failed input to another agent | **No identical retry**: fingerprint = issue text (minus Blocked trailer) + manifest frontmatter, stored at block time | `claim` refuses a re-queued issue with an unchanged fingerprint |
+| the most expensive step starts before the biggest uncertainty is tested | **Disposable probe** under `.harness/scratch/probes/<name>/` during /dig: one question, result into discovery, never merged | scratch is gitignored and outside every `touch`; `mode plan` wipes `probes/` |
+| the user is asked what the repo could answer | /dig communication contract: fact ≠ user question; ask only where the user holds authority; "I don't know" is legal; 1–3 high-leverage questions per turn | — (skill rule) |
+| hooks/paths/worktrees behave differently per platform | `.github/workflows/test.yml`: Windows + Ubuntu matrix, node 24, python 3.12 | CI |
+
+Still not carried over, and still not needed for any of the above: ADR,
+constitution, A/B/C routes, screen = module, line caps, third-caller,
+universal pull-out, BOARD journal, contradiction essays, forced convergence,
+completion reports.
+
+Regression scenarios added to §11: 10 self-review blindness, 11 closed-door
+building, 12 legacy adoption, 13 utility routing, 14 runtime-only defect,
+15 identical retry, 16 disposable probe — all proven red then green in `test/`.
+
 ## 12. Implementation order (dependency order, not phases)
 
 1. Plugin shell ✓ 2. state + hooks foundation (deny proven, plugin loads via

@@ -5,7 +5,7 @@ import {
   findProject, readState, writeState, readLease, writeLease, findLeaseByCwd, findLeaseByAgent,
   rel, matchesAny, norm, snapshot, changedBetween, readJson, readStdinJson,
 } from '../lib/core.mjs';
-import { validateManifestFile, validateIssueFile } from '../lib/validate.mjs';
+import { validateManifestFile, validateIssueFile, validateTicketFile } from '../lib/validate.mjs';
 
 const input = readStdinJson();
 const cwd = input.cwd || process.cwd();
@@ -70,6 +70,7 @@ function afterWrite() {
   const r = rel(project.root, abs);
   let errors = [];
   if (r === 'ARCHITECTURE.md') errors = validateManifestFile(project.root, abs);
-  else if (/^\.work\/(ready|doing|blocked|done)\/[^/]+\.md$/.test(r)) errors = validateIssueFile(abs);
+  else if (/^\.work\/(ready|doing|blocked|done)\/[^/]+\.md$/.test(r)) errors = validateIssueFile(abs, project.root);
+  else if (/^\.work\/tickets\/[^/]+\.md$/.test(r)) errors = validateTicketFile(abs);
   if (errors.length) fail(`harness: ${r} is invalid:\n  ${errors.join('\n  ')}`);
 }

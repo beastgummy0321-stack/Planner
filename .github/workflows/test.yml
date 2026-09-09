@@ -1,0 +1,27 @@
+name: test
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    # hooks, paths, git worktrees and shell spawning differ between platforms; both must stay green
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, ubuntu-latest]
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 24
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+      - run: git config --global user.email ci@harness && git config --global user.name ci
+        shell: bash
+      - run: npm test
+        env:
+          CLAUDE_PLUGIN_ROOT: ${{ github.workspace }}

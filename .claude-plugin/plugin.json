@@ -1,6 +1,6 @@
 {
   "name": "harness",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Decision → decomposition → issue execution harness. /grill (frontier + user, no build), /plan (planner: architecture manifest, feature→ticket→issue), /work (control plane: claim, worktree, scope/import/ownership gates, verify, merge, integrate, cleanup).",
   "author": { "name": "beastgummy0321-stack" }
 }

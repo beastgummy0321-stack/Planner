@@ -3,7 +3,7 @@ import path from 'node:path';
 import { appendFileSync as fsAppend } from 'node:fs';
 import {
   findProject, readState, findLeaseByCwd, findLeaseByAgent, listLeases, writeLease, worktreeRoot,
-  isInside, rel, matchesAny, norm, snapshot, writeJsonAtomic, readStdinJson, deny, allow,
+  isInside, rel, matchesAny, norm, snapshot, writeJsonAtomic, readStdinJson, deny, allow, planHash,
 } from '../lib/core.mjs';
 
 const WRITE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
@@ -100,8 +100,16 @@ function gateAgent() {
   const sub = String(input.tool_input?.subagent_type || '');
   const wantsWorker = /worker/i.test(sub);
   const wantsPlanner = /planner/i.test(sub);
-  if (mode === 'grill' && (wantsWorker || wantsPlanner)) deny('No-Build gate: mode is grill; no planner or worker dispatch until the user types /carve');
+  const wantsChallenger = /challenger/i.test(sub);
+  if (mode === 'grill' && (wantsWorker || wantsPlanner || wantsChallenger)) deny('No-Build gate: mode is grill; no planner, challenger or worker dispatch until the user types /carve');
   if (mode === 'plan' && wantsWorker) deny('plan mode: no worker dispatch until the user types /crank');
+  if (wantsChallenger) {
+    if (mode !== 'plan') deny('the Independent Challenge runs in plan mode on a finished draft');
+    const prompt = String(input.tool_input?.prompt || '');
+    if (/rationale|reasoning|why I chose|my thinking/i.test(prompt)) deny('the challenger must not receive the planner\'s reasoning or rationale — only the confirmed outcome, ARCHITECTURE.md, PLAN, tickets, issues');
+    // hook-written record: the model cannot fake that a challenge was dispatched this round
+    writeJsonAtomic(path.join(project.harness, 'runtime', 'challenge.json'), { dispatched_at: Date.now(), plan_hash: planHash(project.root), tool_use_id: input.tool_use_id || null });
+  }
   if (wantsWorker) {
     const pending = listLeases(project).filter((l) => !l.worktree);
     if (!pending.length) deny('worker dispatch requires a claimed issue: run harness claim <id> first');
