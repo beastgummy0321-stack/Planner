@@ -144,7 +144,7 @@ function lifecycle(r) {
   const wt = path.join(r, '.claude/worktrees/agent-1');
   g(r, 'worktree', 'add', '-q', '-b', 'worktree-agent-1', wt);
   const at = harness(wt, 'attach', 'F01-T01-I01');
-  assert.equal(at.code, 0, at.err); assert.match(at.out, /environment: ready/);
+  assert.equal(at.code, 0, at.err); assert.match(at.out, /environment: lazy/);
   const agent = { agent_id: 'a1', agent_type: 'harness:worker' };
   assert.equal(W(wt, 'src/modules/identity/read.ts', agent).denied, false);
   fs.writeFileSync(path.join(wt, 'src/modules/identity/read.ts'), 'export const read = () => 1;\n');

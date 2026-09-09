@@ -34,10 +34,10 @@ async function help() {
   mode <grill|plan|work>   switch mode — only after the user typed the matching skill
   validate             check ARCHITECTURE.md manifest and every .work issue file
   claim <id>           ready/ → doing/ atomically and create the lease
-  attach <id>          (worker, inside its worktree) bind cwd/branch/base_sha to the lease
+  attach <id>          (worker, inside its worktree) bind cwd/branch/base_sha to the lease; env stays cold until needed
   release <id>         doing/ → ready/, drop the lease (orchestrator only)
   adapter plan|apply --approved|check|prove   container checker for the stack (ts, python)
-  env                  (worker, inside worktree) frozen dependency install
+  env                  (worker, inside worktree) frozen dependency install now (normally lazy)
   queue next           claimable issues (deps done, no overlap, dependency changes alone)
   finish <id>          scope post-diff · checker · ownership · verify · typecheck/build → green or blocked/
   review <id> approve  (planner agent only) record the review receipt for the current worktree head
@@ -191,13 +191,10 @@ async function attach(id) {
   lease.base = tryGit(p.root, 'branch', '--show-current') || 'main';
   lease.attached_at = Date.now();
   writeLease(p, lease);
-  const { manifest } = readManifest(p.root);
-  const envr = setupEnv(top, manifest?.stack || detectStack(top));
   const issue = fs.readFileSync(issueFile(p, 'doing', id), 'utf8');
   out(`attached ${id} to ${lease.worktree} (branch ${lease.branch}, base ${lease.base_sha.slice(0, 8)})\n` +
-      `environment: ${envr.ok ? 'ready' : 'FAILED'} ${JSON.stringify(envr.log)}\n` +
+      `environment: lazy (dependencies install once, before the first runtime command)\n` +
       `touch: ${JSON.stringify(lease.touch)}\nallowed Bash (exact): ${JSON.stringify(lease.allowed_commands)}\n\n${issue}`);
-  if (!envr.ok) process.exit(1);
 }
 
 async function release(id) {

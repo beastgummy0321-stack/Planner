@@ -5,6 +5,7 @@ import {
   findProject, readState, findLeaseByCwd, findLeaseByAgent, listLeases, writeLease, readLease, worktreeRoot,
   isInside, rel, matchesAny, norm, snapshot, writeJsonAtomic, readStdinJson, deny, allow, planHash,
 } from '../lib/core.mjs';
+import { needsRuntime, ensureEnv } from '../lib/adapters.mjs';
 
 const WRITE_TOOLS = new Set(['Write', 'Edit', 'MultiEdit', 'NotebookEdit']);
 const PLAN_ALLOW = ['ARCHITECTURE.md', '.work/**', '.harness/**'];
@@ -102,6 +103,11 @@ function gateBash() {
     if (lease.violations?.length) deny(`issue ${lease.issue} is violated; Bash disabled until the issue is blocked`);
     const allowed = (lease.allowed_commands || []).map((c) => c.trim());
     if (!allowed.includes(cmd)) deny(`worker Bash is default-deny. Allowed exactly: ${JSON.stringify(allowed)}. Explore with Read/Grep/Glob.`);
+    if (needsRuntime(cmd)) {
+      // lazy env: the frozen install runs here, once, before the first command that needs a runtime
+      const e = ensureEnv(project, lease);
+      if (!e.ok) deny(`issue ${lease.issue}: environment setup failed before ${cmd}: ${JSON.stringify(e.log)}`);
+    }
     baseline();
     allow();
   }
