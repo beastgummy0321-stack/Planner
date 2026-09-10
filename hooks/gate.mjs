@@ -3,7 +3,7 @@ import path from 'node:path';
 import { appendFileSync as fsAppend } from 'node:fs';
 import {
   findProject, readState, findLeaseByCwd, findLeaseByAgent, listLeases, writeLease, readLease, worktreeRoot,
-  isInside, rel, matchesAny, norm, snapshot, writeJsonAtomic, readStdinJson, deny, allow, planHash,
+  isInside, rel, matchesAny, norm, snapshot, writeJsonAtomic, readJson, readStdinJson, deny, allow, planHash,
 } from '../lib/core.mjs';
 import { needsRuntime, ensureEnv } from '../lib/adapters.mjs';
 
@@ -109,6 +109,16 @@ function gateBash() {
       if (!e.ok) deny(`issue ${lease.issue}: environment setup failed before ${cmd}: ${JSON.stringify(e.log)}`);
     }
     baseline();
+    allow();
+  }
+  if (/challenger/i.test(agentType)) {
+    // the challenger is read-only; its one Bash call is the verdict. Hook-signed here, so neither the control plane nor a
+    // PostToolUse text scrape records it on the challenger's behalf (a background Agent returns a launch notice, not the review)
+    const m = harnessCli(cmd, 'challenge') ? /\bchallenge\s+(CLEAR|CHALLENGE)\b/.exec(cmd) : null;
+    if (!m) deny('the challenger is read-only: Bash only for harness challenge <CLEAR|CHALLENGE>');
+    const file = path.join(project.harness, 'runtime', 'challenge.json');
+    const ch = readJson(file, null);
+    if (ch) writeJsonAtomic(file, { ...ch, completed: true, verdict: m[1], completed_at: Date.now(), agent_id: input.agent_id || null, agent_type: agentType });
     allow();
   }
   if (harnessCli(cmd, '\\w[\\w-]*')) {

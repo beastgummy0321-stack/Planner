@@ -23,9 +23,11 @@ The planner, in order:
 7. Run `harness validate` again. Delete `.harness/scratch/discovery.md`.
 
 ## Then the Independent Challenge (one round, above the machine floor)
-`harness mode work` demands it when ARCHITECTURE.md changed this round (or is new), when any issue carries `review: planner`, or when more than one ticket is open — it names the reason when it refuses. Below that floor the plan goes straight to /crank; the planner may still ask for one when unsure. To run it: dispatch `Agent(subagent_type: "harness:challenger")` with only the user-confirmed outcome (one paragraph) and the paths of `ARCHITECTURE.md`, `.work/PLAN.md`, `.work/tickets/`, `.work/ready/`. **Never the planner's reasoning or rationale** — the gate denies it; a reviewer who reads the author's defence is anchored.
+`harness mode work` demands it when ARCHITECTURE.md changed this round (or is new), when any issue carries `review: planner`, or when more than one ticket is open — it names the reason when it refuses. Below that floor the plan goes straight to /crank; the planner may still ask for one when unsure. To run it: dispatch `Agent(subagent_type: "harness:challenger")` with only the user-confirmed outcome (one paragraph), the paths of `ARCHITECTURE.md`, `.work/PLAN.md`, `.work/tickets/`, `.work/ready/`, and the CLI path (`node "${CLAUDE_PLUGIN_ROOT}/bin/harness.mjs"`) — the challenger records its own verdict with `harness challenge <CLEAR|CHALLENGE>` (hook-signed; the main conversation cannot record it). **Never the planner's reasoning or rationale** — the gate denies it; a reviewer who reads the author's defence is anchored.
 
 The challenger answers CLEAR or CHALLENGE with evidence, no veto. On CHALLENGE, dispatch the original planner once to fix the draft and re-run `harness validate`. A product or architecture disagreement goes back to the user: "this needs /dig". No second round.
+
+**Challenge-only round** (`/carve challenge`, or `harness mode work` refused because the challenge never recorded a verdict or the plan changed after its CLEAR): run `harness mode plan`, `harness validate`, then dispatch the challenger on the existing draft exactly as above. No planner, no re-planning; the draft on disk is the draft under review.
 
 ## Finish
 Show the user the PLAN tree, the ready issue ids, the challenge verdict (or that none was required) and any human acceptance items, then say: "type /crank to start execution — a fresh session is fine, the plan and queue are on disk." Do not invoke /crank yourself.

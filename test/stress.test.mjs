@@ -263,3 +263,29 @@ test('scenario 29: environment setup picks the right frozen install per package 
   assert.deepEqual(envCommands(d, 'python').cmds, ['uv sync --frozen']);
   assert.match(envCommands(dir(), 'python').notes[0], /no uv\.lock/);
 });
+
+test('scenario 44: a background challenger\'s launch notice is not a review; the verdict is hook-signed by the challenger itself, never by the control plane', () => {
+  const r = tmpRepo(); harness(r, 'init'); writeManifest(r); setMode(r, 'plan');
+  const tool_input = { subagent_type: 'harness:challenger', prompt: 'Challenge this draft.' };
+  hook('gate', { cwd: r, tool_name: 'Agent', tool_input, tool_use_id: 'ch1' }, r);
+  // PostToolUse fires at launch for a background Agent: the notice even contains the word CLEAR, and is no review
+  hook('post', { cwd: r, tool_name: 'Agent', tool_input, tool_use_id: 'ch1', tool_response: 'Async agent launched successfully. agentId: abc. Answer CLEAR or CHALLENGE.' }, r);
+  userTyped(r, '/crank'); let w = harness(r, 'mode', 'work'); assert.equal(w.code, 1); assert.match(w.err, /never returned a verdict/);
+  // the control plane (no agent_type) runs the command: nothing is signed, the CLI refuses, work stays shut
+  B(r, `${CLI} challenge CLEAR`);
+  assert.equal(harness(r, 'challenge', 'CLEAR').code, 1);
+  userTyped(r, '/crank'); assert.equal(harness(r, 'mode', 'work').code, 1);
+  // the challenger may run nothing but the verdict command
+  assert.equal(B(r, 'git status', { agent_type: 'harness:challenger' }).denied, true);
+  assert.equal(B(r, `${CLI} challenge MAYBE`, { agent_type: 'harness:challenger' }).denied, true);
+  // its own command is hook-signed; the CLI confirms it and work opens
+  assert.equal(B(r, `${CLI} challenge CLEAR`, { agent_type: 'harness:challenger', agent_id: 'a1' }).denied, false);
+  const c = harness(r, 'challenge', 'CLEAR'); assert.equal(c.code, 0, c.err); assert.match(c.out, /challenge recorded: CLEAR/);
+  userTyped(r, '/crank'); w = harness(r, 'mode', 'work'); assert.equal(w.code, 0, w.err);
+  // synchronous fallback: a verdict LINE counts, a mention inside prose does not
+  setMode(r, 'plan');
+  hook('gate', { cwd: r, tool_name: 'Agent', tool_input, tool_use_id: 'ch2' }, r);
+  hook('post', { cwd: r, tool_name: 'Agent', tool_input, tool_use_id: 'ch2', tool_response: 'Not CLEAR at all.\n\n**CHALLENGE**\n1. Contradiction: x' }, r);
+  const ch = JSON.parse(fs.readFileSync(path.join(r, '.harness/runtime/challenge.json'), 'utf8'));
+  assert.equal(ch.verdict, 'CHALLENGE');
+});

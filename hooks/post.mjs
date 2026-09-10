@@ -19,13 +19,17 @@ else if (tool === 'Agent') afterAgent();
 process.exit(0);
 
 // The challenge counts only when the challenger came back: a dispatch that timed out or crashed is not a review.
+// The verdict is normally hook-signed by the challenger's own `harness challenge <verdict>` (gate.mjs); this is the fallback
+// for a synchronous Agent return. A background Agent fires PostToolUse at launch — that notice is not a review.
 function afterAgent() {
   if (!/challenger/i.test(String(input.tool_input?.subagent_type || ''))) return;
   const file = path.join(project.harness, 'runtime', 'challenge.json');
   const ch = readJson(file, null);
-  if (!ch) return;
+  if (!ch || ch.verdict) return; // already signed by the challenger
   const text = typeof input.tool_response === 'string' ? input.tool_response : JSON.stringify(input.tool_response ?? '');
-  const verdict = (/\b(CLEAR|CHALLENGE)\b/.exec(text) || [])[1] || null;
+  if (/agent launched|agentId:/i.test(text)) return;
+  const verdict = (/^\s*[*_`#>\s]*(CLEAR|CHALLENGE)\b/m.exec(text) || [])[1] || null; // the verdict line, not the first mention
+  if (!verdict) return;
   writeJsonAtomic(file, { ...ch, completed: true, verdict, completed_at: Date.now() });
 }
 

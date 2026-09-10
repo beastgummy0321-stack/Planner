@@ -49,12 +49,15 @@ export function setMode(cwd, m, { challenge = true } = {}) {
   const r = harness(cwd, 'mode', m);
   if (r.code !== 0) throw new Error(r.err);
 }
-// dispatch through the PreToolUse gate and, unless told otherwise, return through PostToolUse with a verdict — a dispatch alone is not a review
+// dispatch through the PreToolUse gate and, unless told otherwise, let the challenger sign its verdict through the gate
+// (its own `harness challenge <verdict>` Bash call) — a dispatch alone is not a review, and a background Agent's PostToolUse
+// fires at launch with a notice, never with the review
 export function challengerDispatched(cwd, prompt = 'Challenge this draft: contradiction, missing assumption, simpler route, execution trap.', { complete = true, verdict = 'CLEAR' } = {}) {
   const tool_input = { subagent_type: 'harness:challenger', prompt };
   const r = hook('gate', { cwd, tool_name: 'Agent', tool_input, tool_use_id: 'ch1' }, cwd);
-  if (complete && !r.denied) hook('post', { cwd, tool_name: 'Agent', tool_input, tool_use_id: 'ch1', tool_response: `${verdict}
-1. Contradiction: none.` }, cwd);
+  if (r.denied) return r;
+  hook('post', { cwd, tool_name: 'Agent', tool_input, tool_use_id: 'ch1', tool_response: 'Async agent launched successfully. agentId: ch1. Answer CLEAR or CHALLENGE.' }, cwd);
+  if (complete) hook('gate', { cwd, tool_name: 'Bash', tool_input: { command: `node "${PLUGIN.replace(/\\/g, '/')}/bin/harness.mjs" challenge ${verdict}` }, tool_use_id: 'ch1b', agent_type: 'harness:challenger', agent_id: 'ch1' }, cwd);
   return r;
 }
 

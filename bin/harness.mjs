@@ -16,7 +16,7 @@ import * as Q from '../lib/queue.mjs';
 const [cmd, ...args] = process.argv.slice(2);
 const cwd = process.cwd();
 
-const commands = { init, status, mode, validate, claim, attach, release, adapter, env, queue: queueCmd, finish, review, merge, block, diff, integrate, close, 'plan-sync': planSync, help };
+const commands = { init, status, mode, validate, claim, attach, release, adapter, env, queue: queueCmd, finish, review, challenge, merge, block, diff, integrate, close, 'plan-sync': planSync, help };
 // metrics: one line per CLI call in .harness/runtime/metrics.jsonl (gitignored, never injected into any context) —
 // the only way to see where wall time goes before deciding what else to make conditional
 const t0 = Date.now();
@@ -49,6 +49,7 @@ async function help() {
   queue next           claimable issues (deps done, no overlap, dependency changes alone)
   finish <id>          scope post-diff · checker · ownership · verify · typecheck/build → green or blocked/
   review <id> approve  (planner agent only) record the review receipt for the current worktree head
+  challenge <CLEAR|CHALLENGE>   (challenger agent only) record the Independent Challenge verdict for the plan it read
   merge <id>           merge the issue branch into base, integration gate, smoke in the worktree, → done/
   block <id> "<reason>"     doing/ → blocked/ with reason; worktree discarded
   diff <id> [--stat]   diff of the issue branch against its base (reviewers: --stat first, then read the files)
@@ -108,8 +109,8 @@ async function mode(next) {
         if (why.length) die(`refused: no Independent Challenge this planning round (${why.join(', ')}). In /carve, dispatch Agent(subagent_type: "harness:challenger") on the finished draft (one round), then /crank.`);
         out('challenge: not required (architecture unchanged, one ticket, no planner-reviewed issue)');
       } else {
-        if (!ch.completed) die('refused: the Independent Challenge was dispatched but never returned (timeout/crash?). A dispatch is not a review; dispatch it again.');
-        if (ch.verdict === 'CLEAR' && ch.plan_hash !== planHash(p.root)) die('refused: the plan changed after the challenger said CLEAR; its review covers the old draft. Dispatch the challenger again.');
+        if (!ch.completed || !ch.verdict) die('refused: the Independent Challenge never returned a verdict (timeout/crash, or the challenger did not run `harness challenge <CLEAR|CHALLENGE>`). A dispatch is not a review: type /carve challenge to dispatch it again on the existing draft.');
+        if (ch.verdict === 'CLEAR' && ch.plan_hash !== planHash(p.root)) die('refused: the plan changed after the challenger said CLEAR; its review covers the old draft. Type /carve challenge to dispatch it again on the existing draft.');
       }
     }
     state.arch_hash = archHash;
@@ -293,6 +294,14 @@ async function review(id, verdict) {
   const lease = readLease(p, id) || die(`no lease for ${id}`);
   if (!rc || rc.head_sha !== lease.head_sha) die(`no review receipt for ${id} at ${lease.head_sha?.slice(0, 8)}: this command counts only when the harness:planner agent runs it (the hook records it); the control plane cannot approve`);
   out(`review recorded: ${id} approve at ${rc.head_sha.slice(0, 8)} by ${rc.agent_type}`);
+}
+async function challenge(verdict) {
+  const p = project();
+  if (!['CLEAR', 'CHALLENGE'].includes(verdict)) die('challenge <CLEAR|CHALLENGE>');
+  // the receipt itself is written by the PreToolUse hook when the challenger agent runs this command; here we only confirm it
+  const ch = readJson(path.join(p.harness, 'runtime', 'challenge.json'), null) || die('no Independent Challenge dispatched this planning round');
+  if (!ch.completed || ch.verdict !== verdict) die('verdict not recorded: this command counts only when the harness:challenger agent runs it (the hook signs it); the control plane cannot record a verdict');
+  out(`challenge recorded: ${verdict} for plan ${String(ch.plan_hash).slice(0, 8)} by ${ch.agent_type || 'agent'}`);
 }
 async function merge(id) {
   const p = project(); id || die('merge <id>');
