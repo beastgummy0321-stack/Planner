@@ -196,7 +196,9 @@ Worktrees are Claude Code's own (`isolation: worktree`), one per issue, never
 the shared main tree. Environment adapter: `ts` → detect lockfile, frozen
 install with the project's package manager (npm ci / pnpm install
 --frozen-lockfile / yarn --immutable) using its global cache; `python` → `uv
-sync` per worktree with the shared cache. No shared `node_modules` junction:
+sync` per worktree with the shared cache. Either stack also installs a JS app
+that lives in a subdirectory and carries its own lockfile (`frontend/`), because
+the project's verify commands run there. No shared `node_modules` junction:
 that is shared mutable state. `.worktreeinclude` carries gitignored runtime
 files (`.env`) into worktrees.
 

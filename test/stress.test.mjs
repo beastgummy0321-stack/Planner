@@ -262,6 +262,13 @@ test('scenario 29: environment setup picks the right frozen install per package 
   d = dir(); fs.writeFileSync(path.join(d, 'uv.lock'), '');
   assert.deepEqual(envCommands(d, 'python').cmds, ['uv sync --frozen']);
   assert.match(envCommands(dir(), 'python').notes[0], /no uv\.lock/);
+  // a JS app in a subdirectory: the verify commands run there, so its dependencies are installed too
+  fs.mkdirSync(path.join(d, 'frontend')); fs.writeFileSync(path.join(d, 'frontend/package.json'), '{}');
+  fs.writeFileSync(path.join(d, 'frontend/package-lock.json'), '{}');
+  fs.mkdirSync(path.join(d, 'docs')); // no package.json: not an app
+  assert.deepEqual(envCommands(d, 'python').cmds, ['uv sync --frozen', 'cd frontend && npm ci']);
+  fs.rmSync(path.join(d, 'frontend/package-lock.json')); // workspace package, no lockfile of its own
+  assert.deepEqual(envCommands(d, 'python').cmds, ['uv sync --frozen']);
 });
 
 test('scenario 44: a background challenger\'s launch notice is not a review; the verdict is hook-signed by the challenger itself, never by the control plane', () => {
