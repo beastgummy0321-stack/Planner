@@ -27,7 +27,7 @@ The planner, in order:
 
 The challenger answers CLEAR or CHALLENGE with evidence, no veto. On CHALLENGE, dispatch the original planner once to fix the draft and re-run `harness validate`. A product or architecture disagreement goes back to the user: "this needs /dig". No second round.
 
-**Challenge-only round** (`/carve challenge`, or `harness mode work` refused because the challenge never recorded a verdict or the plan changed after its CLEAR): run `harness mode plan`, `harness validate`, then dispatch the challenger on the existing draft exactly as above. No planner, no re-planning; the draft on disk is the draft under review.
+If the challenge is missing or stale when the user later types /crank (never returned a verdict, or the plan changed after its CLEAR), /crank dispatches the challenger itself on the draft on disk; the user never types anything but /dig, /carve, /crank.
 
 ## Finish
 Show the user the PLAN tree, the ready issue ids, the challenge verdict (or that none was required) and any human acceptance items, then say: "type /crank to start execution — a fresh session is fine, the plan and queue are on disk." Do not invoke /crank yourself.

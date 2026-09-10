@@ -11,7 +11,11 @@ The main conversation is the control plane: it calls `harness` scripts, dispatch
 CLI: `node "${CLAUDE_PLUGIN_ROOT}/bin/harness.mjs" <command>` (called `harness` below).
 
 ## First
-Run `harness mode work`. If refused (no user prompt, violations, invalid manifest, or the Independent Challenge never returned / the plan changed after its CLEAR), show the reason and stop. It also recovers leases left by a dead session (issue re-queued, partial diff saved under `.harness/runtime/logs/`): tell the user which, then continue.
+Run `harness mode work`. It also recovers leases left by a dead session (issue re-queued, partial diff saved under `.harness/runtime/logs/`): tell the user which, then continue.
+
+If it refuses with `Independent Challenge needed` (none this round, the last one never returned a verdict, or the plan changed after its CLEAR), recover without the user: the mode is still plan, so dispatch `Agent(subagent_type: "harness:challenger")` on the draft on disk exactly as /carve does — only the user-confirmed outcome (one paragraph, from `.work/PLAN.md` / the feature ticket, never the planner's reasoning), the paths of `ARCHITECTURE.md`, `.work/PLAN.md`, `.work/tickets/`, `.work/ready/`, and the CLI path; the challenger signs its verdict itself with `harness challenge <CLEAR|CHALLENGE>`. On CHALLENGE dispatch `harness:planner` once to fix the draft and run `harness validate`; a product or architecture disagreement stops here: "this needs /dig". Then run `harness mode work` again. One challenge round per /crank; if it refuses again for the same reason, show the reason and stop.
+
+Any other refusal (no user prompt, violations, invalid manifest): show the reason and stop.
 
 Bash in the main conversation is limited to `harness` commands and read-only git; anything else is denied before it runs.
 

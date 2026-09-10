@@ -270,7 +270,10 @@ test('scenario 44: a background challenger\'s launch notice is not a review; the
   hook('gate', { cwd: r, tool_name: 'Agent', tool_input, tool_use_id: 'ch1' }, r);
   // PostToolUse fires at launch for a background Agent: the notice even contains the word CLEAR, and is no review
   hook('post', { cwd: r, tool_name: 'Agent', tool_input, tool_use_id: 'ch1', tool_response: 'Async agent launched successfully. agentId: abc. Answer CLEAR or CHALLENGE.' }, r);
-  userTyped(r, '/crank'); let w = harness(r, 'mode', 'work'); assert.equal(w.code, 1); assert.match(w.err, /never returned a verdict/);
+  userTyped(r, '/crank'); let w = harness(r, 'mode', 'work'); assert.equal(w.code, 1); assert.match(w.err, /Independent Challenge needed.*never returned a verdict/);
+  // /crank recovers by itself: the refusal left the mode in plan, so a fresh challenger dispatch is still allowed
+  assert.equal(JSON.parse(fs.readFileSync(path.join(r, '.harness/state.json'), 'utf8')).mode, 'plan');
+  assert.equal(hook('gate', { cwd: r, tool_name: 'Agent', tool_input, tool_use_id: 'ch1r' }, r).denied, false);
   // the control plane (no agent_type) runs the command: nothing is signed, the CLI refuses, work stays shut
   B(r, `${CLI} challenge CLEAR`);
   assert.equal(harness(r, 'challenge', 'CLEAR').code, 1);

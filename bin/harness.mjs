@@ -106,11 +106,11 @@ async function mode(next) {
       if (QUEUE_DIRS.some((d) => Q.listIssues(p, d).some((i) => Q.readIssue(p, d, i).issue?.review === 'planner'))) why.push('an issue needs planner review');
       if (Q.listTickets(p).filter((t) => !Q.readTicket(p, t).data.closed).length > 1) why.push('more than one open ticket');
       if (!ch) {
-        if (why.length) die(`refused: no Independent Challenge this planning round (${why.join(', ')}). In /carve, dispatch Agent(subagent_type: "harness:challenger") on the finished draft (one round), then /crank.`);
+        if (why.length) die(`refused: Independent Challenge needed — none this planning round (${why.join(', ')}). Mode stays plan: dispatch Agent(subagent_type: "harness:challenger") on the draft on disk, then run mode work again.`);
         out('challenge: not required (architecture unchanged, one ticket, no planner-reviewed issue)');
       } else {
-        if (!ch.completed || !ch.verdict) die('refused: the Independent Challenge never returned a verdict (timeout/crash, or the challenger did not run `harness challenge <CLEAR|CHALLENGE>`). A dispatch is not a review: type /carve challenge to dispatch it again on the existing draft.');
-        if (ch.verdict === 'CLEAR' && ch.plan_hash !== planHash(p.root)) die('refused: the plan changed after the challenger said CLEAR; its review covers the old draft. Type /carve challenge to dispatch it again on the existing draft.');
+        if (!ch.completed || !ch.verdict) die('refused: Independent Challenge needed — the last one never returned a verdict (timeout/crash, or the challenger did not run `harness challenge <CLEAR|CHALLENGE>`). A dispatch is not a review. Mode stays plan: dispatch the challenger again on the draft on disk, then run mode work again.');
+        if (ch.verdict === 'CLEAR' && ch.plan_hash !== planHash(p.root)) die('refused: Independent Challenge needed — the plan changed after the challenger said CLEAR; its review covers the old draft. Mode stays plan: dispatch the challenger again on the draft on disk, then run mode work again.');
       }
     }
     state.arch_hash = archHash;
