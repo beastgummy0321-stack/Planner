@@ -47,7 +47,7 @@ Two things do: a worker leaving its scope, and a verification that is red.
 
 ```
 /dig        "I want to think, not build, right now."
-/prototype  "Let me click it before you build it."
+/demo       "Let me click it before you build it."
 /carve      "Turn what we know into a feature and issues."
 /crank      "Run the queue."
 ```
@@ -56,14 +56,14 @@ None is required before another. "This plan is fine, do it" carves and cranks wi
 further command; "/dig" on a running feature is a discussion, not a rollback. The plugin
 never answers "type /carve to continue".
 
-`/prototype` is a disposable probe specialised for UI, not a stage: one self-contained
+`/demo` is a disposable probe specialised for UI, not a stage: one self-contained
 `index.html` under `.harness/scratch/prototype/<slug>/`, opened by double-click, every flow
 clickable, deterministic fake data, no backend. The user reacts in plain language; the
 prototyper revises in place; one version unless the user asks for several. An approved
 prototype becomes lines in the feature's Decisions and stays in scratch as the workers'
 visual reference until the feature closes. No queue, state, approval file or CLI for it.
 
-What is uncertain decides the probe: the screen → `/prototype`; a library or feasibility → a
+What is uncertain decides the probe: the screen → `/demo`; a library or feasibility → a
 scratch probe; ownership or boundaries → the planner; a clear small change → just do it. Once
 the product is settled, the planner cuts the smallest shared frontend↔backend contract as the
 first issue (in code or Decisions, never a new document), then disjoint frontend (real UI, fake
@@ -118,7 +118,7 @@ triage. The main conversation is the control plane and is never forked into a su
 
 Import checker adapters (ts: dependency-cruiser; python: shipped AST script) · ownership analyzers
 (supabase-table, drizzle-table, sqlalchemy-model, sql-table) · legacy surface with facades ·
-reuse scan · disposable probes · clickable UI prototype (`/prototype`, prototyper agent) · independent challenge (planner-triggered, one round, never
+reuse scan · disposable probes · clickable UI prototype (`/demo`, prototyper agent) · independent challenge (planner-triggered, one round, never
 handed the planner's rationale) · lazy frozen env per worktree · docs-only fast path · evidence
 router · metrics in `.harness/runtime/metrics.jsonl` · SessionStart injection of feature,
 outcome, decisions, queue, last interruption.

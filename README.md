@@ -5,7 +5,7 @@ Design: [SPEC.md](SPEC.md).
 
 ```
 /dig        think it through with the user          — nothing is built, nothing is locked
-/prototype  clickable fake-data UI to react to      — one index.html in scratch, opened by double-click
+/demo       clickable fake-data UI to react to      — one index.html in scratch, opened by double-click
 /carve      feature + issues on one branch          — planner model, optional independent challenge
 /crank      claim → worktree → worker → gates → merge → integrate → close   — control plane + workers
 ```

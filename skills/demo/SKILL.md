@@ -1,11 +1,11 @@
 ---
-name: prototype
-description: Build a clickable, fake-data UI prototype the user can open in a browser and react to, before any real implementation. Use when the user types /prototype, says "let me see it first / 先做一版可以點的 / 先給我看畫面", or when the biggest unknown of a feature is layout, hierarchy, flow or interaction rather than data or architecture. It is a disposable probe, not a lifecycle stage.
+name: demo
+description: Build a clickable, fake-data UI prototype the user can open in a browser and react to, before any real implementation. Use when the user types /demo, says "let me see it first / 先做一版可以點的 / 先給我看畫面", or when the biggest unknown of a feature is layout, hierarchy, flow or interaction rather than data or architecture. It is a disposable probe, not a lifecycle stage.
 ---
 
-# /prototype — show it before building it
+# /demo — show it before building it
 
-`/prototype` is an intent: **the cheapest way to settle a visual or interaction question is to click it.** It is a disposable probe (see `/dig`) specialised for UI. Nothing precedes it and nothing has to follow it: the user reacts in plain language, you revise in place, and when they say it is right the direction continues into `/carve` without another command. You may also decide on your own that a feature's real risk is the screen, say so in one line, and run this.
+`/demo` is an intent: **the cheapest way to settle a visual or interaction question is to click it.** It is a disposable probe (see `/dig`) specialised for UI. Nothing precedes it and nothing has to follow it: the user reacts in plain language, you revise in place, and when they say it is right the direction continues into `/carve` without another command. You may also decide on your own that a feature's real risk is the screen, say so in one line, and run this.
 
 ## What it is
 - Lives in `.harness/scratch/prototype/<slug>/` (gitignored). It stays there — as the visual reference for the workers — until `harness close feature` clears scratch.

@@ -28,7 +28,7 @@ When the direction would add infrastructure, a cross-cutting abstraction, a thir
 ## Disposable probe
 When the biggest uncertainty is cheaper to test than to argue — one sandbox API call, a small benchmark, a 20-line library spike — build it under `.harness/scratch/probes/<name>/`. One question, result into discovery.md, never a starting point for production code. Probes stay in scratch until `harness close feature` clears it.
 
-When the uncertainty is the screen — layout, hierarchy, flow, what gets clicked — the probe is `/prototype`: a clickable fake-data UI the user opens in a browser. Run it yourself when seeing beats discussing; always run it when the user says "let me see it first". Its approved state is a Decision for `/carve`, not a reason for another round here.
+When the uncertainty is the screen — layout, hierarchy, flow, what gets clicked — the probe is `/demo`: a clickable fake-data UI the user opens in a browser. Run it yourself when seeing beats discussing; always run it when the user says "let me see it first". Its approved state is a Decision for `/carve`, not a reason for another round here.
 
 ## Not here
 - Production code, issues, ARCHITECTURE.md: that is `/carve`'s output. A dig that turns into "just fix this one line" is fine — say so and do it; a dig that turns into a feature gets carved.

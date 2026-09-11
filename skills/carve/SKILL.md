@@ -12,7 +12,7 @@ CLI: `node "${CLAUDE_PLUGIN_ROOT}/bin/harness.mjs" <command>` (called `harness` 
 ## First
 1. No `.harness/`: `harness init` (git repo required).
 2. Gather the direction: `.harness/scratch/discovery.md` if it exists, else the conversation, else the prompt. Read `ARCHITECTURE.md` and `harness status` if they exist. An approved prototype under `.harness/scratch/prototype/<slug>/` is part of the direction: its confirmed UX choices go into `# Decisions` and frontend issues name it as their visual reference. Re-planning a running feature is normal: the feature file and its ready/blocked issues are the input.
-3. Material user-facing UI whose direction is not yet settled (no approved prototype, no Decision, no established screen to extend): run `/prototype` first and carve after the user has reacted — the screen is the cheapest place to find a product mistake. The user saying "skip it, just build" is a settled direction; this is a default, not a gate.
+3. Material user-facing UI whose direction is not yet settled (no approved prototype, no Decision, no established screen to extend): run `/demo` first and carve after the user has reacted — the screen is the cheapest place to find a product mistake. The user saying "skip it, just build" is a settled direction; this is a default, not a gate.
 
 ## Dispatch the planner
 `Agent(subagent_type: "harness:planner")` with the direction verbatim, the CLI path, and the steps below. Do not plan in the main conversation.
