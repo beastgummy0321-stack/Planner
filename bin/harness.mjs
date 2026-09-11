@@ -6,7 +6,7 @@ import {
   QUEUE_DIRS, findProject, readJson, writeJsonAtomic, readLease, writeLease, listLeases, leasePath, tryGit, norm, worktreeRoot, isInside, issueFingerprint,
 } from '../lib/core.mjs';
 import { readManifest, validateIssueFile, validateIssueText, validateFeatureFile } from '../lib/validate.mjs';
-import { statusText } from '../lib/status.mjs';
+import { statusText, section } from '../lib/status.mjs';
 import { planAdapter, applyAdapter, runChecker, proveChecker, setupEnv, detectStack } from '../lib/adapters.mjs';
 import * as Q from '../lib/queue.mjs';
 
@@ -152,6 +152,11 @@ async function attach(id) {
   lease.attached_at = Date.now();
   writeLease(p, lease);
   const issue = fs.readFileSync(issueFile(p, 'doing', id), 'utf8');
+  // the feature's outcome and decisions travel with the issue: the worker never saw the discussion, this is what survived it
+  const fid = validateIssueText(issue).issue?.feature;
+  const feat = fid ? Q.readFeature(p, fid) : null;
+  const decisions = feat ? section(feat.body, 'Decisions').map((d) => (d.startsWith('-') ? `  ${d}` : `  - ${d}`)).join('\n') : '';
+  const featureBlock = feat ? `feature ${fid} — ${feat.data.title}\noutcome: ${section(feat.body, 'Outcome').join(' ')}\ndecisions (settled; implement within them, never against them):\n${decisions || '  (none)'}\n` : '';
   // the worker's context pack: the issue plus the contract of the modules its touch globs reach — not the ARCHITECTURE prose
   const { manifest } = readManifest(p.root);
   const prefix = (g) => g.split(/[*?[{]/)[0];
@@ -167,7 +172,7 @@ async function attach(id) {
       `touch: ${JSON.stringify(lease.touch)}${lease.do_not_touch?.length ? `\ndo_not_touch: ${JSON.stringify(lease.do_not_touch)}` : ''}\n` +
       `verify (finish re-runs these): ${JSON.stringify(lease.verify_commands)}${lease.privileged_commands?.length ? `\nprivileged (run once, by you): ${JSON.stringify(lease.privileged_commands)}` : ''}\n` +
       `Bash: anything non-destructive; every call is diffed — a change outside touch blocks the issue\n` +
-      `modules touched (other modules only through their public entry):\n${slice.join('\n') || '  (none declared)'}\n\n${issue}`);
+      `modules touched (other modules only through their public entry):\n${slice.join('\n') || '  (none declared)'}\n${featureBlock}\n${issue}`);
 }
 
 async function release(id) {

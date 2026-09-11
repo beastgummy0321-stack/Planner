@@ -160,6 +160,7 @@ test('session status: feature, outcome, decisions, queue, last interruption — 
   assert.equal(harness(r, 'claim', 'F01-I01').code, 0);
   s = hook('session', { cwd: r, session_start_reason: 'resume' }, r);
   assert.match(s.out, /Feature: F01 — Identity read model \(branch feature\/identity-read, main tree is on main\)/);
+  assert.match(s.out, /Stored state is context, not authority: the newest user message overrides/);
   assert.match(s.out, /Outcome: identity read model works/);
   assert.match(s.out, /Decisions:\n- identity owns users/);
   assert.match(s.out, /Queue: doing F01-I01 · ready F01-I02 · blocked none · done 0/);

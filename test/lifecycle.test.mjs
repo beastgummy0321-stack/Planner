@@ -150,6 +150,8 @@ function lifecycle(r) {
   // scenario 42: the worker's context pack names the module contract it works inside, not the ARCHITECTURE prose
   assert.match(at.out, /identity: root src\/modules\/identity · public src\/modules\/identity\/index\.ts/);
   assert.doesNotMatch(at.out, /billing: root/);
+  // the worker never saw the discussion: attach hands it the feature's outcome and decisions next to the issue
+  assert.match(at.out, /outcome: identity read model works\ndecisions \(settled; implement within them, never against them\):\n  - identity owns users/);
   const agent = { agent_id: 'a1', agent_type: 'harness:worker' };
   assert.equal(W(wt, 'src/modules/identity/read.ts', agent).denied, false);
   fs.writeFileSync(path.join(wt, 'src/modules/identity/read.ts'), 'export const read = () => 1;\n');

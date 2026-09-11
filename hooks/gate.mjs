@@ -1,6 +1,7 @@
 // PreToolUse: the execution container. It governs workers only — has the worker a lease, is it in its worktree,
 // is the file inside touch and outside do_not_touch, is the command destructive. The main conversation and the
-// planner are never gated here: anything may advise, only execution isolation and failed verification may block.
+// planner are never scope-gated here (anything may advise, only execution isolation and failed verification may
+// block); the destructive-command reflex below is the one deny that applies to everyone.
 import path from 'node:path';
 import { appendFileSync as fsAppend } from 'node:fs';
 import {

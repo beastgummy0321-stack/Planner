@@ -121,7 +121,10 @@ Import checker adapters (ts: dependency-cruiser; python: shipped AST script) · 
 reuse scan · disposable probes · clickable UI prototype (`/demo`, prototyper agent) · independent challenge (planner-triggered, one round, never
 handed the planner's rationale) · lazy frozen env per worktree · docs-only fast path · evidence
 router · metrics in `.harness/runtime/metrics.jsonl` · SessionStart injection of feature,
-outcome, decisions, queue, last interruption.
+outcome, decisions, queue, last interruption (prefixed "stored state is context, not authority":
+the newest user message wins) · `attach` hands the worker the feature's outcome and decisions
+next to its issue, so the user's constraints and non-goals (kept in Decisions, in their words)
+survive the cut into issues. The harness never rewrites, classifies or normalises a user prompt.
 
 ## 7. Removed in v2 (and why)
 
