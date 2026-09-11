@@ -28,4 +28,10 @@ description: Build a clickable, fake-data UI prototype the user can open in a br
 5. Record in `discovery.md`: prototype slug and path, what was shown, what the user changed, what they approved. Revisions go back to the prototyper as a diff of instructions ("sidebar out, main action first, keep the rest").
 
 ## Skills are capabilities, not a checklist
-Installed UI skills (an Impeccable-style critique, a design-direction generator, an art-direction skill, a component kit) are inputs the prototyper may use. Pick at most one for direction and at most one critique pass; never chain them because they exist. Established project UI → use none. New product UI with no direction → one direction pass, then build. Brand or landing page → art direction first, then build.
+Installed UI skills are inputs the prototyper may use, when they are installed and when they fit. Pick at most one for direction and at most one critique pass; never chain them because they exist.
+- Established project UI → none; inherit it.
+- Product UI with no direction → `ui-ux-pro-max` for one design direction (palette, type, density), then build.
+- Brand or landing page → `taste-skill` for art direction, then build.
+- React/Tailwind project that already uses `shadcn/ui` → reproduce its component look; it is the parts bin, not the art director.
+- After the build, when it matters → one `impeccable` critique pass, then hand it to the user.
+Not installed → skip without comment.
