@@ -63,6 +63,13 @@ prototyper revises in place; one version unless the user asks for several. An ap
 prototype becomes lines in the feature's Decisions and stays in scratch as the workers'
 visual reference until the feature closes. No queue, state, approval file or CLI for it.
 
+What is uncertain decides the probe: the screen → `/prototype`; a library or feasibility → a
+scratch probe; ownership or boundaries → the planner; a clear small change → just do it. Once
+the product is settled, the planner cuts the smallest shared frontend↔backend contract as the
+first issue (in code or Decisions, never a new document), then disjoint frontend (real UI, fake
+adapter) and backend issues that `/crank` runs in parallel, then one wiring issue. Frontend and
+backend are issue specialisations, not agents; the scheduler already exists.
+
 ## 4. Files in a target project
 
 ```
