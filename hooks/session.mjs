@@ -1,4 +1,4 @@
-// SessionStart: inject only current mode, active work, blocked issues and violations.
+// SessionStart: inject only the open feature (outcome, decisions, queue) and the last interruption.
 import { findProject, readStdinJson } from '../lib/core.mjs';
 import { statusText } from '../lib/status.mjs';
 

@@ -26,7 +26,9 @@ description: Think a wish, direction, architecture or doubt through with the use
 When the direction would add infrastructure, a cross-cutting abstraction, a third-party integration, a package or SDK, or a generic capability the market very likely already solved (workflow, parser, queue, auth, cache, retry, scheduler, editor, uploader…): dispatch `Agent(subagent_type: "harness:utility")` with the **reuse scan** job (`Capability / Current stack / Required contract / Constraints`). It searches repo → installed skills/plugins/MCP → skill ecosystem → platform primitive → installed dependency → maintained package → reference implementation, and returns at most three candidates. Record the result in discovery.md. Not for typos, copy, small bugs, plain business logic, or a choice the user already made.
 
 ## Disposable probe
-When the biggest uncertainty is cheaper to test than to argue — a UX flow, one sandbox API call, a small benchmark, a 20-line library spike, two or three visual style anchors — build it under `.harness/scratch/probes/<name>/`. One question, result into discovery.md, never a starting point for production code. `/carve` wipes probes.
+When the biggest uncertainty is cheaper to test than to argue — one sandbox API call, a small benchmark, a 20-line library spike — build it under `.harness/scratch/probes/<name>/`. One question, result into discovery.md, never a starting point for production code. Probes stay in scratch until `harness close feature` clears it.
+
+When the uncertainty is the screen — layout, hierarchy, flow, what gets clicked — the probe is `/prototype`: a clickable fake-data UI the user opens in a browser. Run it yourself when seeing beats discussing; always run it when the user says "let me see it first". Its approved state is a Decision for `/carve`, not a reason for another round here.
 
 ## Not here
 - Production code, issues, ARCHITECTURE.md: that is `/carve`'s output. A dig that turns into "just fix this one line" is fine — say so and do it; a dig that turns into a feature gets carved.

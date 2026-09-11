@@ -93,6 +93,10 @@ test('scenario 16: a disposable probe lives in scratch and is gone once the feat
   fs.mkdirSync(path.dirname(probe), { recursive: true }); fs.writeFileSync(probe, 'x');
   assert.equal(hook('gate', { cwd: r, tool_name: 'Write', tool_input: { file_path: probe, content: 'x' } }, r).denied, false);
   assert.equal(g(r, 'status', '--porcelain').includes('probes'), false, 'a probe is never a tracked file');
+  const proto = path.join(r, '.harness/scratch/prototype/dash/index.html');
+  fs.mkdirSync(path.dirname(proto), { recursive: true }); fs.writeFileSync(proto, '<h1>x</h1>');
+  assert.equal(hook('gate', { cwd: r, tool_name: 'Write', tool_input: { file_path: proto, content: 'x' }, agent_type: 'prototyper' }, r).denied, false, 'the prototyper is not a worker');
+  assert.equal(hook('gate', { cwd: r, tool_name: 'Agent', tool_input: { subagent_type: 'harness:prototyper' } }, r).denied, false, 'prototyper dispatch needs no lease');
   assert.match(harness(r, 'feature', 'start', 'F01').out, /no branch declared/);
   writeIssue(r, 'ready', ISSUE({ verify: ['npm test'] }));
   workerDoes(r, 'F01-I01', (wt) => fs.writeFileSync(path.join(wt, 'src/modules/identity/d.ts'), 'export const d = 1;\n'));
@@ -103,4 +107,5 @@ test('scenario 16: a disposable probe lives in scratch and is gone once the feat
   assert.equal(JSON.parse(cl.out).merged, undefined);
   assert.equal(g(r, 'branch', '--show-current'), 'main');
   assert.ok(!fs.existsSync(path.join(r, '.harness/scratch/probes')), 'scratch cleared at close');
+  assert.ok(!fs.existsSync(path.join(r, '.harness/scratch/prototype')), 'prototype cleared at close');
 });

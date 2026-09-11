@@ -4,12 +4,13 @@ A Claude Code plugin: a planning layer that thinks freely, a Kanban, and an isol
 Design: [SPEC.md](SPEC.md).
 
 ```
-/dig     think it through with the user          — nothing is built, nothing is locked
-/carve   feature + issues on one branch          — planner model, optional independent challenge
-/crank   claim → worktree → worker → gates → merge → integrate → close   — control plane + workers
+/dig        think it through with the user          — nothing is built, nothing is locked
+/prototype  clickable fake-data UI to react to      — one index.html in scratch, opened by double-click
+/carve      feature + issues on one branch          — planner model, optional independent challenge
+/crank      claim → worktree → worker → gates → merge → integrate → close   — control plane + workers
 ```
 
-None of the three is required before another: "this is fine, do it" carves and cranks by itself.
+None of the four is required before another: "this is fine, do it" carves and cranks by itself.
 
 > Anything may advise. Only execution isolation and failed verification may block.
 
@@ -27,7 +28,7 @@ Tests: `npm test` (creates temp git repos; the TS chain installs dependency-crui
 ```
 ARCHITECTURE.md   optional: frontmatter = JSON manifest (modules, resources, verify, checker); body = current truth
 .work/            features/F01.md · ready/ doing/ blocked/ done/   — the only queue
-.harness/         gitignored: scratch/ (discovery, probes), runtime/ (leases, baselines, logs, reviews)
+.harness/         gitignored: scratch/ (discovery, probes, prototype), runtime/ (leases, baselines, logs, reviews)
 tools/            the container checker the project can run without the plugin (CI too)
 ```
 
@@ -51,7 +52,7 @@ runs the same chain without the import checker.
 
 The main conversation and the planner are not gated: they may write, run, re-plan, and discuss at any time.
 
-Agents: `planner` (opus), `challenger` (opus, read-only, planner-triggered), `worker` (sonnet, worktree), `utility` (haiku: reuse scan, log triage, inventory, runtime acceptance, mechanical checks).
+Agents: `planner` (opus), `challenger` (opus, read-only, planner-triggered), `worker` (sonnet, worktree), `prototyper` (sonnet, scratch only), `utility` (haiku: reuse scan, log triage, inventory, runtime acceptance, mechanical checks).
 CI: Windows + Ubuntu (`.github/workflows/test.yml`).
 
 CLI: `node bin/harness.mjs help`.
