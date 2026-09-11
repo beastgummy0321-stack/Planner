@@ -38,27 +38,9 @@ export function hook(name, input, cwd) {
   return { code: r.status, out: r.stdout, err: r.stderr, json, denied: json?.hookSpecificOutput?.permissionDecision === 'deny', reason: json?.hookSpecificOutput?.permissionDecisionReason || '' };
 }
 
+// UserPromptSubmit only records which session is alive (lease ownership for `harness recover`)
 export function userTyped(cwd, prompt, session = 's1') {
   return hook('prompt', { cwd, prompt, session_id: session }, cwd);
-}
-
-export function setMode(cwd, m, { challenge = true } = {}) {
-  // entering work requires an Independent Challenge dispatched during plan mode; simulate the dispatch through the real gate hook
-  if (m === 'work' && challenge) challengerDispatched(cwd);
-  userTyped(cwd, `/${{ grill: 'dig', plan: 'carve', work: 'crank' }[m]}`);
-  const r = harness(cwd, 'mode', m);
-  if (r.code !== 0) throw new Error(r.err);
-}
-// dispatch through the PreToolUse gate and, unless told otherwise, let the challenger sign its verdict through the gate
-// (its own `harness challenge <verdict>` Bash call) — a dispatch alone is not a review, and a background Agent's PostToolUse
-// fires at launch with a notice, never with the review
-export function challengerDispatched(cwd, prompt = 'Challenge this draft: contradiction, missing assumption, simpler route, execution trap.', { complete = true, verdict = 'CLEAR' } = {}) {
-  const tool_input = { subagent_type: 'harness:challenger', prompt };
-  const r = hook('gate', { cwd, tool_name: 'Agent', tool_input, tool_use_id: 'ch1' }, cwd);
-  if (r.denied) return r;
-  hook('post', { cwd, tool_name: 'Agent', tool_input, tool_use_id: 'ch1', tool_response: 'Async agent launched successfully. agentId: ch1. Answer CLEAR or CHALLENGE.' }, cwd);
-  if (complete) hook('gate', { cwd, tool_name: 'Bash', tool_input: { command: `node "${PLUGIN.replace(/\\/g, '/')}/bin/harness.mjs" challenge ${verdict}` }, tool_use_id: 'ch1b', agent_type: 'harness:challenger', agent_id: 'ch1' }, cwd);
-  return r;
 }
 
 export function writeIssue(cwd, dir, data, body = '# Objective\nx\n# Done\ny\n# Verify\nz\n# Blocked if\nw\n') {
@@ -67,15 +49,22 @@ export function writeIssue(cwd, dir, data, body = '# Objective\nx\n# Done\ny\n# 
   fs.writeFileSync(file, `---\n${JSON.stringify(data)}\n---\n${body}`);
   return file;
 }
+export function writeFeature(cwd, data = {}, body = '# Outcome\nidentity read model works\n# Decisions\n- identity owns users\n# Acceptance\nx\n') {
+  const d = { id: 'F01', title: 'Identity read model', verify: [], closed: false, ...data };
+  fs.mkdirSync(path.join(cwd, '.work/features'), { recursive: true });
+  const file = path.join(cwd, '.work/features', `${d.id}.md`);
+  fs.writeFileSync(file, `---\n${JSON.stringify(d)}\n---\n${body}`);
+  return file;
+}
 
 export const ISSUE = (over = {}) => ({
-  id: 'F01-T01-I01', feature: 'F01', ticket: 'T01', after: [],
+  id: 'F01-I01', feature: 'F01', after: [],
   touch: ['src/modules/identity/**'], do_not_touch: ['src/modules/billing/**'],
   verify: ['npm test'], privileged: [], interface_change: false, review: 'none', ...over,
 });
 
 export const MANIFEST = () => ({
-  harness: 1, stack: 'ts', app_shell: ['src/app/**'],
+  stack: 'ts', app_shell: ['src/app/**'],
   modules: {
     identity: { root: 'src/modules/identity', public: 'src/modules/identity/index.ts', may_depend_on: [], owns: ['src/modules/identity/**'] },
     billing: { root: 'src/modules/billing', public: 'src/modules/billing/index.ts', may_depend_on: ['identity'], owns: ['src/modules/billing/**'] },
@@ -93,4 +82,25 @@ export function addWorktree(cwd, name) {
   const wt = path.join(cwd, '.harness', 'worktrees', name);
   execFileSync('git', ['worktree', 'add', '-q', '-b', `harness/${name}`, wt], { cwd, stdio: 'pipe' });
   return wt.replace(/\\/g, '/');
+}
+
+// init + manifest (checker stubbed) + feature file, committed: the state /crank starts from
+export function workReady(r, extraManifest = {}, feature = {}) {
+  harness(r, 'init');
+  if (extraManifest !== null) writeManifest(r, { ...MANIFEST(), checker: { command: 'node -e 0' }, ...extraManifest });
+  writeFeature(r, feature);
+  const g = (...a) => execFileSync('git', a, { cwd: r, stdio: 'pipe' });
+  g('add', '-A'); g('commit', '-qm', 'plan');
+  userTyped(r, 'go');
+}
+// claim + a worktree the way Claude Code's isolation: worktree would make it + attach + the worker's edit
+export function workerDoes(r, id, edit) {
+  const c = harness(r, 'claim', id);
+  if (c.code !== 0) throw new Error(c.err);
+  const wt = path.join(r, '.claude/worktrees', id);
+  execFileSync('git', ['worktree', 'add', '-q', '-b', `wt-${id}`, wt], { cwd: r, stdio: 'pipe' });
+  const a = harness(wt, 'attach', id);
+  if (a.code !== 0) throw new Error(a.err);
+  edit(wt);
+  return wt;
 }

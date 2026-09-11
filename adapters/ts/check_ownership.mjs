@@ -6,6 +6,7 @@
 //                   a non-literal target (.from(table)) inside any managed module is UNKNOWN = red
 //   drizzle-table:  importing the table symbol from one of its definition files (import/export binding)
 //   sql-table:      the table name inside a string literal (raw SQL)
+//   anything else:  skipped (no analyzer) — the planner reviews ownership by hand
 // A bare local identifier that happens to share the name (const users = []) is not a violation.
 // ponytail: regex on import statements, not a TS AST — aliased sources (@/db/schema) match by path tail;
 // a re-export barrel outside `definition` is not followed. Upgrade to the TypeScript API if that bites.
@@ -71,7 +72,7 @@ for (const abs of files(ROOT)) {
       if (matches(p, r.definition || [])) continue;
       const pat = new RegExp(`['"\`][^'"\`\\n]*\\b${sym}\\b[^'"\`\\n]*['"\`]`, 'g');
       for (const m of src.matchAll(pat)) violations.push(`${p}:${lineOf(src, m.index)}: ${who} accesses resource ${name} owned by ${r.owner} (sql literal)`);
-    } else violations.push(`ARCHITECTURE.md:0: resource ${name}: unsupported ownership adapter for kind ${r.kind}`);
+    } // any other kind: no analyzer for it — skipped, the planner reviews ownership by hand
   }
   // dynamic supabase target in managed code: the analyzer cannot tell whose table it is, so it is red, not silently green.
   // A capitalised receiver (Array.from, Buffer.from, Readable.from) is a static factory, not a client.

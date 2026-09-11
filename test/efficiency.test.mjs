@@ -1,34 +1,15 @@
-// v1.3 efficiency scenarios: the harness pays for assurance only where it can catch something.
-// 37/38 lazy env, 39 docs-only diff, 40 challenge floor, 41 adapter idempotence, 42 attach context + diff --stat + metrics.
+// Pay for assurance only where it can catch something: lazy env, docs-only fast path, checker skipped when absent.
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
 import { execFileSync } from 'node:child_process';
-import { tmpRepo, harness, hook, userTyped, setMode, challengerDispatched, writeIssue, ISSUE, writeManifest, MANIFEST } from './helpers.mjs';
+import { tmpRepo, harness, hook, writeIssue, ISSUE, workReady, workerDoes } from './helpers.mjs';
 
 const g = (cwd, ...a) => execFileSync('git', a, { cwd, stdio: 'pipe', encoding: 'utf8' }).trim();
 const B = (cwd, command, extra = {}) => hook('gate', { cwd, tool_name: 'Bash', tool_input: { command }, tool_use_id: extra.tool_use_id || 'b1', ...extra }, cwd);
 const WORKER = { agent_id: 'a1', agent_type: 'harness:worker' };
-const ticket = (r, data, body = '# Outcome\nx\n# Acceptance\ny\n') => {
-  fs.mkdirSync(path.join(r, '.work/tickets'), { recursive: true });
-  fs.writeFileSync(path.join(r, `.work/tickets/${data.id}.md`), `---\n${JSON.stringify({ feature: data.id.slice(0, 3), title: 't', verify: [], closed: false, ...data })}\n---\n${body}`);
-};
-function workReady(r, extraManifest = {}) {
-  harness(r, 'init');
-  writeManifest(r, { ...MANIFEST(), checker: { command: 'node -e 0' }, ...extraManifest });
-  g(r, 'add', '-A'); g(r, 'commit', '-qm', 'arch');
-  setMode(r, 'plan'); ticket(r, { id: 'F01-T01' }); setMode(r, 'work');
-}
-function workerDoes(r, id, edit) {
-  assert.equal(harness(r, 'claim', id).code, 0, harness(r, 'claim', id).err);
-  const wt = path.join(r, '.claude/worktrees', id);
-  g(r, 'worktree', 'add', '-q', '-b', `wt-${id}`, wt);
-  assert.equal(harness(wt, 'attach', id).code, 0);
-  edit(wt);
-  return wt;
-}
 // A fake `npm` first on PATH that only counts its invocations: the tests assert when the install did and did not run.
 function stubNpm() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'npm-stub-'));
@@ -47,41 +28,16 @@ test('scenario 37: a copy-only issue never installs dependencies — attach, wor
     fs.mkdirSync(path.join(r, 'docs'), { recursive: true }); fs.writeFileSync(path.join(r, 'docs/a.md'), 'buy now\n'); g(r, 'add', '-A'); g(r, 'commit', '-qm', 'docs');
     const verify = 'git grep -q "buy today" -- docs/a.md';
     writeIssue(r, 'ready', ISSUE({ touch: ['docs/**'], do_not_touch: [], verify: [verify] }));
-    const wt = workerDoes(r, 'F01-T01-I01', (w) => fs.writeFileSync(path.join(w, 'docs/a.md'), 'buy today\n'));
+    const wt = workerDoes(r, 'F01-I01', (w) => fs.writeFileSync(path.join(w, 'docs/a.md'), 'buy today\n'));
     assert.equal(npm.calls(), 0, 'attach must not install');
     assert.equal(B(wt, verify, WORKER).denied, false);
     assert.equal(npm.calls(), 0, 'a git command needs no runtime');
-    const fin = harness(r, 'finish', 'F01-T01-I01'); assert.equal(fin.code, 0, fin.out + fin.err);
+    const fin = harness(r, 'finish', 'F01-I01'); assert.equal(fin.code, 0, fin.out + fin.err);
     assert.ok(JSON.parse(fin.out).steps.some((s) => s.step === 'container checker' && s.skipped));
-    const m = harness(r, 'merge', 'F01-T01-I01'); assert.equal(m.code, 0, m.err); assert.match(JSON.parse(m.out).skipped, /docs-only/);
+    const m = harness(r, 'merge', 'F01-I01'); assert.equal(m.code, 0, m.err); assert.match(JSON.parse(m.out).skipped, /docs-only/);
     assert.equal(npm.calls(), 0, 'finish/merge on a docs-only diff never installed');
     assert.match(fs.readFileSync(path.join(r, 'docs/a.md'), 'utf8'), /buy today/);
   } finally { npm.restore(); }
-});
-
-test('scenario 40: the Independent Challenge is demanded only above the machine floor — first plan, architecture change, planner-reviewed issue, or a second ticket', () => {
-  const r = tmpRepo(); harness(r, 'init'); writeManifest(r); g(r, 'add', '-A'); g(r, 'commit', '-qm', 'arch');
-  setMode(r, 'plan'); ticket(r, { id: 'F01-T01' }); writeIssue(r, 'ready', ISSUE());
-  // first plan: the architecture is new → challenge required
-  userTyped(r, '/crank'); let w = harness(r, 'mode', 'work'); assert.equal(w.code, 1); assert.match(w.err, /first plan/);
-  challengerDispatched(r); userTyped(r, '/crank'); w = harness(r, 'mode', 'work'); assert.equal(w.code, 0, w.err);
-  // bounded second round: same architecture, one ticket, review: none → no challenge needed, and it says so
-  setMode(r, 'plan'); writeIssue(r, 'ready', ISSUE({ id: 'F01-T01-I02' }));
-  userTyped(r, '/crank'); w = harness(r, 'mode', 'work'); assert.equal(w.code, 0, w.err); assert.match(w.out, /challenge: not required/);
-  // architecture edited → required again
-  setMode(r, 'plan'); writeManifest(r, MANIFEST(), '\n# Architecture\nnew module reasoning\n');
-  userTyped(r, '/crank'); w = harness(r, 'mode', 'work'); assert.equal(w.code, 1); assert.match(w.err, /ARCHITECTURE\.md changed/);
-  challengerDispatched(r); userTyped(r, '/crank'); assert.equal(harness(r, 'mode', 'work').code, 0);
-  // a planner-reviewed issue → required
-  setMode(r, 'plan'); writeIssue(r, 'ready', ISSUE({ id: 'F01-T01-I03', interface_change: true, review: 'planner' }));
-  userTyped(r, '/crank'); w = harness(r, 'mode', 'work'); assert.equal(w.code, 1); assert.match(w.err, /planner review/);
-  fs.rmSync(path.join(r, '.work/ready/F01-T01-I03.md'));
-  // a second open ticket → required
-  ticket(r, { id: 'F01-T02' });
-  userTyped(r, '/crank'); w = harness(r, 'mode', 'work'); assert.equal(w.code, 1); assert.match(w.err, /more than one open ticket/);
-  // a challenge that did happen is still held to completed + plan_hash (scenarios 21/22 unchanged)
-  challengerDispatched(r, undefined, { complete: false });
-  userTyped(r, '/crank'); w = harness(r, 'mode', 'work'); assert.equal(w.code, 1); assert.match(w.err, /never returned/);
 });
 
 test('scenario 39: a docs-only diff skips typecheck/build/smoke; the same issue touching code runs them', { timeout: 120000 }, () => {
@@ -90,17 +46,16 @@ test('scenario 39: a docs-only diff skips typecheck/build/smoke; the same issue 
   const r = tmpRepo(); workReady(r, { verify: { test: 'npm test', typecheck: touchMarker, smoke: touchMarker } });
   fs.mkdirSync(path.join(r, 'docs'), { recursive: true }); fs.writeFileSync(path.join(r, 'docs/a.md'), 'a\n'); g(r, 'add', '-A'); g(r, 'commit', '-qm', 'docs');
   writeIssue(r, 'ready', ISSUE({ touch: ['docs/**', 'src/modules/identity/**'], do_not_touch: [], verify: ['git status'] }));
-  workerDoes(r, 'F01-T01-I01', (w) => fs.writeFileSync(path.join(w, 'docs/a.md'), 'b\n'));
-  let fin = JSON.parse(harness(r, 'finish', 'F01-T01-I01').out);
+  workerDoes(r, 'F01-I01', (w) => fs.writeFileSync(path.join(w, 'docs/a.md'), 'b\n'));
+  let fin = JSON.parse(harness(r, 'finish', 'F01-I01').out);
   assert.equal(fin.ok, true); assert.ok(fin.steps.some((s) => s.step === 'typecheck' && s.skipped === 'docs-only diff'));
-  assert.equal(harness(r, 'merge', 'F01-T01-I01').code, 0);
+  assert.equal(harness(r, 'merge', 'F01-I01').code, 0);
   assert.ok(!fs.existsSync(marker), 'typecheck and smoke never ran for prose');
-  // same shape, but a .ts file is in the diff → the gates run
-  writeIssue(r, 'ready', ISSUE({ id: 'F01-T01-I02', touch: ['docs/**', 'src/modules/identity/**'], do_not_touch: [], verify: ['git status'] }));
-  workerDoes(r, 'F01-T01-I02', (w) => { fs.writeFileSync(path.join(w, 'docs/a.md'), 'c\n'); fs.writeFileSync(path.join(w, 'src/modules/identity/y.ts'), 'export const y = 1;\n'); });
-  fin = JSON.parse(harness(r, 'finish', 'F01-T01-I02').out);
+  writeIssue(r, 'ready', ISSUE({ id: 'F01-I02', touch: ['docs/**', 'src/modules/identity/**'], do_not_touch: [], verify: ['git status'] }));
+  workerDoes(r, 'F01-I02', (w) => { fs.writeFileSync(path.join(w, 'docs/a.md'), 'c\n'); fs.writeFileSync(path.join(w, 'src/modules/identity/y.ts'), 'export const y = 1;\n'); });
+  fin = JSON.parse(harness(r, 'finish', 'F01-I02').out);
   assert.equal(fin.ok, true, JSON.stringify(fin)); assert.ok(fin.steps.some((s) => s.step.startsWith('typecheck:') && s.ok));
-  assert.equal(harness(r, 'merge', 'F01-T01-I02').code, 0);
+  assert.equal(harness(r, 'merge', 'F01-I02').code, 0);
   assert.equal(fs.readFileSync(marker, 'utf8'), 'xx', 'typecheck at finish + smoke at merge');
   fs.rmSync(marker);
 });
@@ -110,15 +65,48 @@ test('scenario 38: the first runtime command installs exactly once; the second c
   try {
     const r = tmpRepo(); workReady(r);
     writeIssue(r, 'ready', ISSUE({ verify: ['npm test'] }));
-    const wt = workerDoes(r, 'F01-T01-I01', (w) => fs.writeFileSync(path.join(w, 'src/modules/identity/x.ts'), 'export const x = 1;\n'));
+    const wt = workerDoes(r, 'F01-I01', (w) => fs.writeFileSync(path.join(w, 'src/modules/identity/x.ts'), 'export const x = 1;\n'));
     assert.equal(npm.calls(), 0);
     assert.equal(B(wt, 'npm test', WORKER).denied, false);
     assert.equal(npm.calls(), 1, 'install ran once before the first runtime command');
-    assert.equal(JSON.parse(fs.readFileSync(path.join(r, '.harness/runtime/leases/F01-T01-I01.json'), 'utf8')).env_ready, true);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(r, '.harness/runtime/leases/F01-I01.json'), 'utf8')).env_ready, true);
     assert.equal(B(wt, 'npm test', { ...WORKER, tool_use_id: 'b2' }).denied, false);
     assert.equal(npm.calls(), 1, 'no duplicate setup');
-    const fin = harness(r, 'finish', 'F01-T01-I01'); assert.equal(fin.code, 0, fin.out + fin.err);
+    const fin = harness(r, 'finish', 'F01-I01'); assert.equal(fin.code, 0, fin.out + fin.err);
     assert.equal(npm.calls(), 2, 'finish ran `npm test` (stub) but not the install again');
     assert.ok(!JSON.parse(fin.out).steps.some((s) => s.step === 'environment'));
   } finally { npm.restore(); }
 });
+
+test('no ARCHITECTURE.md: the whole chain runs with the architecture container off — checker skipped, scope and verify still enforced', { timeout: 120000 }, () => {
+  const r = tmpRepo(); workReady(r, null);
+  assert.match(harness(r, 'validate').out, /architecture checks off/);
+  assert.match(harness(r, 'adapter', 'check').out, /skipped: no ARCHITECTURE\.md/);
+  writeIssue(r, 'ready', ISSUE({ verify: ['npm test'] }));
+  workerDoes(r, 'F01-I01', (w) => fs.writeFileSync(path.join(w, 'src/modules/identity/x.ts'), 'export const x = 1;\n'));
+  const fin = JSON.parse(harness(r, 'finish', 'F01-I01').out);
+  assert.equal(fin.ok, true, JSON.stringify(fin));
+  assert.ok(fin.steps.some((s) => s.step === 'container checker' && s.skipped === 'no ARCHITECTURE.md'));
+  assert.equal(harness(r, 'merge', 'F01-I01').code, 0);
+  // scope is still a hard line
+  writeIssue(r, 'ready', ISSUE({ id: 'F01-I02', verify: ['npm test'] }));
+  workerDoes(r, 'F01-I02', (w) => fs.writeFileSync(path.join(w, 'src/app/main.ts'), 'escaped'));
+  const bad = harness(r, 'finish', 'F01-I02'); assert.equal(bad.code, 1); assert.match(bad.out, /scope post-diff/);
+});
+
+test('a stack without an adapter, or a resource kind without an analyzer, is skipped — never a reason to stop', () => {
+  const r = tmpRepo(); harness(r, 'init');
+  writeManifestGo(r);
+  const plan = harness(r, 'adapter', 'plan'); assert.equal(plan.code, 0, plan.err); assert.match(plan.out, /no checker adapter for this stack/);
+  assert.equal(harness(r, 'adapter', 'apply', '--approved').code, 1); // nothing to apply, says so
+  const chk = harness(r, 'adapter', 'check'); assert.equal(chk.code, 0); assert.match(chk.out, /skipped: no checker wired for stack go/);
+  assert.equal(harness(r, 'validate').code, 0, harness(r, 'validate').out);
+});
+function writeManifestGo(r) {
+  fs.writeFileSync(path.join(r, 'ARCHITECTURE.md'), `---\n${JSON.stringify({
+    stack: 'go', app_shell: ['cmd/**'],
+    modules: { identity: { root: 'internal/identity', public: 'internal/identity/api.go', may_depend_on: [], owns: ['internal/identity/**'] } },
+    resources: { users: { owner: 'identity', kind: 'gorm-model', definition: ['internal/identity/models.go'], symbol: 'User' } },
+    verify: { test: 'go test ./...' },
+  })}\n---\n# Architecture\n`);
+}

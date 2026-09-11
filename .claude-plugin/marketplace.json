@@ -7,7 +7,7 @@
     {
       "name": "harness",
       "source": "./",
-      "description": "Decision → decomposition → issue execution harness. /dig (frontier + user, no build), /carve (planner: architecture manifest, feature→ticket→issue, independent challenge), /crank (control plane: claim, worktree, scope/import/ownership gates, verify, hook-signed review, merge, smoke, integrate, recovery, cleanup)."
+      "description": "A planning layer that thinks freely, a Kanban, and an isolated executor. /dig (discuss), /carve (planner: feature + issues on one branch, optional independent challenge), /crank (control plane: claim, worktree, scope gate, verify, merge, integrate, close). Anything may advise; only execution isolation and failed verification may block."
     }
   ]
 }
