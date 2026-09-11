@@ -39,7 +39,7 @@ Two things do: a worker leaving its scope, and a verification that is red.
 | frontier   | the model the user is talking to          | discussion, direction, control plane for /crank, final say           | implement an issue itself, read long logs                |
 | planner    | `agents/planner.md` (opus-class)          | architecture when it matters, feature + issues, blocked resolution, reviews, integration review | redefine the product goal (asks the user)     |
 | challenger | `agents/challenger.md` (opus, read-only)  | one independent round on a finished draft: contradiction, missing assumption, simpler route, execution trap | veto, a second round     |
-| worker     | `agents/worker.md` (sonnet, worktree)     | one issue: implement, verify                                         | architecture, scope creep, interface change unless the issue says so |
+| worker     | `agents/worker.md` (sonnet, worktree)     | one issue: implement, verify; UI skills for execution only            | architecture, scope creep, interface change unless the issue says so |
 | prototyper | `agents/prototyper.md` (sonnet)           | one clickable fake-data UI prototype in scratch, revised in place    | backend, issues, architecture, `src/`, a second visual identity |
 | utility    | `agents/utility.md` (haiku)               | reuse scan, log triage, inventory, runtime acceptance, mechanical checks | conclusions                                           |
 

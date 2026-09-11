@@ -1,6 +1,6 @@
 {
   "name": "harness",
-  "version": "2.1.0",
+  "version": "2.1.1",
   "description": "A planning layer that thinks freely, a Kanban, and an isolated executor. /dig (discuss), /prototype (clickable fake-data UI to react to), /carve (planner: feature + issues on one branch, optional independent challenge), /crank (control plane: claim, worktree, scope gate, verify, merge, integrate, close). Anything may advise; only execution isolation and failed verification may block.",
   "author": {
     "name": "beastgummy0321-stack"

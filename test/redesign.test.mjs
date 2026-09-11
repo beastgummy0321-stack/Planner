@@ -99,7 +99,8 @@ test('scenario 16: a disposable probe lives in scratch and is gone once the feat
   assert.equal(hook('gate', { cwd: r, tool_name: 'Agent', tool_input: { subagent_type: 'harness:prototyper' } }, r).denied, false, 'prototyper dispatch needs no lease');
   assert.match(harness(r, 'feature', 'start', 'F01').out, /no branch declared/);
   writeIssue(r, 'ready', ISSUE({ verify: ['npm test'] }));
-  workerDoes(r, 'F01-I01', (wt) => fs.writeFileSync(path.join(wt, 'src/modules/identity/d.ts'), 'export const d = 1;\n'));
+  const wt = workerDoes(r, 'F01-I01', (wt) => fs.writeFileSync(path.join(wt, 'src/modules/identity/d.ts'), 'export const d = 1;\n'));
+  assert.match(harness(wt, 'attach', 'F01-I01').out, /prototype \(visual reference, read only\): \S*scratch\/prototype\/dash/, 'attach hands the worker the prototype path');
   assert.equal(harness(r, 'finish', 'F01-I01').code, 0);
   assert.equal(harness(r, 'merge', 'F01-I01').code, 0);
   assert.equal(harness(r, 'integrate', 'feature', 'F01').code, 0);

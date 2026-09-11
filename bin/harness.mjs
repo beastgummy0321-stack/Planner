@@ -158,7 +158,11 @@ async function attach(id) {
   const slice = Object.entries(manifest?.modules || {})
     .filter(([, m]) => (lease.touch || []).some((g) => prefix(g).startsWith(m.root) || m.root.startsWith(prefix(g))))
     .map(([n, m]) => `  ${n}: root ${m.root} · public ${m.public} · may_depend_on [${(m.may_depend_on || []).join(', ')}] · owns ${JSON.stringify(m.owns)}`);
+  // an approved prototype lives in the main tree's scratch (gitignored, so absent from the worktree): hand the worker its absolute path
+  const protoDir = path.join(p.harness, 'scratch', 'prototype');
+  const protos = fs.existsSync(protoDir) ? fs.readdirSync(protoDir).map((d) => path.join(protoDir, d).replace(/\\/g, '/')) : [];
   out(`attached ${id} to ${lease.worktree} (branch ${lease.branch}, base ${lease.base_sha.slice(0, 8)})\n` +
+      (protos.length ? `prototype (visual reference, read only): ${protos.join(', ')}\n` : '') +
       `environment: lazy (dependencies install once, before the first runtime command)\n` +
       `touch: ${JSON.stringify(lease.touch)}${lease.do_not_touch?.length ? `\ndo_not_touch: ${JSON.stringify(lease.do_not_touch)}` : ''}\n` +
       `verify (finish re-runs these): ${JSON.stringify(lease.verify_commands)}${lease.privileged_commands?.length ? `\nprivileged (run once, by you): ${JSON.stringify(lease.privileged_commands)}` : ''}\n` +
