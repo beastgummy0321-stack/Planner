@@ -8,9 +8,10 @@ Design: [SPEC.md](SPEC.md).
 /demo       clickable fake-data UI to react to      — one index.html in scratch, opened by double-click
 /carve      feature + issues on one branch          — planner model, optional independent challenge
 /crank      claim → worktree → worker → gates → merge → integrate → close   — control plane + workers
+/retro      end-of-session workflow correction    — root cause only; usual answer is no change
 ```
 
-None of the four is required before another: "this is fine, do it" carves and cranks by itself.
+None of the five is required before another: "this is fine, do it" carves and cranks by itself.
 
 > Anything may advise. Only execution isolation and failed verification may block.
 

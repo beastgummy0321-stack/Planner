@@ -13,6 +13,10 @@ sends it back to the planner. An adapter that does not support the stack is not 
 A reuse scan that finds a package is input for the planner. None of these stop anything.
 Two things do: a worker leaving its scope, and a verification that is red.
 
+> **Never optimize the workflow merely because a session ended.** Modify it only when observed
+> evidence reveals a reusable root-cause failure; prefer simplifying or correcting an existing
+> principle over adding a new rule. (`/retro` is this judgment; its usual answer is "no change".)
+
 ## 1. Five principles (everything else is a capability)
 
 1. **Frontier and planner are never locked.** The main conversation may discuss, redesign,
@@ -50,6 +54,7 @@ Two things do: a worker leaving its scope, and a verification that is red.
 /demo       "Let me click it before you build it."
 /carve      "Turn what we know into a feature and issues."
 /crank      "Run the queue."
+/retro      "Did this session prove the workflow wrong? Fix the smallest thing, or nothing."
 ```
 
 None is required before another. "This plan is fine, do it" carves and cranks without a
