@@ -10,9 +10,10 @@ Design: [SPEC.md](SPEC.md).
 /crank      claim → worktree → worker → gates → merge → integrate → close   — control plane + workers
 /retro      end-of-session workflow correction    — root cause only; usual answer is no change
 /handoff    save → read back → fresh session, or resume   — existing state only; no handoff file
+/dist       run → extract → fit → validate → delete again — an outside repo's capability, not its architecture
 ```
 
-None of the six is required before another: "do it" carves by itself, shows the plan once, and your answer runs the whole queue.
+None of the seven is required before another: "do it" carves by itself, shows the plan once, and your answer runs the whole queue.
 
 > Anything may advise. Only execution isolation and failed verification may block.
 

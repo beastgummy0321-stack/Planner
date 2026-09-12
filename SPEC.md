@@ -58,6 +58,7 @@ re-plans, added issues and the rest of the queue never ask again.
 /crank      "Run the queue."
 /retro      "Did this session prove the workflow wrong? Fix the smallest thing, or nothing."
 /handoff    "Save what the next session needs, then continue fresh — or resume from it."
+/dist       "Give us what that repo does, not how it is built."
 ```
 
 None is required before another. "Do it" carves without a further command, and the carved plan is

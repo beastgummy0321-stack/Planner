@@ -7,7 +7,7 @@
     {
       "name": "harness",
       "source": "./",
-      "description": "A planning layer that thinks freely, a Kanban, and an isolated executor. /dig (discuss), /demo (clickable fake-data UI to react to), /carve (planner: feature + issues on one branch, optional independent challenge), /crank (control plane: claim, worktree, scope gate, verify, merge, integrate, close). Anything may advise; only execution isolation and failed verification may block."
+      "description": "A planning layer that thinks freely, a Kanban, and an isolated executor. Anything may advise; only execution isolation and failed verification may block."
     }
   ]
 }
