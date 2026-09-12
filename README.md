@@ -9,9 +9,10 @@ Design: [SPEC.md](SPEC.md).
 /carve      feature + issues on one branch          — planner model, optional independent challenge
 /crank      claim → worktree → worker → gates → merge → integrate → close   — control plane + workers
 /retro      end-of-session workflow correction    — root cause only; usual answer is no change
+/handoff    save → read back → fresh session, or resume   — existing state only; no handoff file
 ```
 
-None of the five is required before another: "this is fine, do it" carves and cranks by itself.
+None of the six is required before another: "do it" carves by itself, shows the plan once, and your answer runs the whole queue.
 
 > Anything may advise. Only execution isolation and failed verification may block.
 
@@ -47,6 +48,7 @@ runs the same chain without the import checker.
 | Agent | anyone | a worker dispatch needs a claimed issue |
 | finish | — | scope post-diff · checker (skipped when the project has none) · issue verify · typecheck/build |
 | merge | — | planner receipt at the current head when `review: planner`; integration checker + `verify.smoke` in the worktree (rolled back on red) |
+| claim | — | a feature's first claim waits until the user has answered the plan (issues newer than the user's last message are refused); later claims never ask |
 | claim | — | refused for a re-queued blocked issue whose text + manifest are unchanged |
 | integrate feature | — | checker · test/build · feature verify · smoke · runtime acceptance; human items surfaced, never auto-closed |
 | close feature | — | done issues + feature file deleted; feature branch merged into its base and removed |

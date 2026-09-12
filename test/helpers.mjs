@@ -95,6 +95,7 @@ export function workReady(r, extraManifest = {}, feature = {}) {
 }
 // claim + a worktree the way Claude Code's isolation: worktree would make it + attach + the worker's edit
 export function workerDoes(r, id, edit) {
+  userTyped(r, 'go'); // the user answered the plan: a feature's first claim waits for that
   const c = harness(r, 'claim', id);
   if (c.code !== 0) throw new Error(c.err);
   const wt = path.join(r, '.claude/worktrees', id);

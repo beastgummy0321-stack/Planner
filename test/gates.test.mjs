@@ -3,7 +3,7 @@ import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import fs from 'node:fs';
 import path from 'node:path';
-import { tmpRepo, harness, hook, writeIssue, writeFeature, ISSUE, writeManifest, MANIFEST, addWorktree, workReady, PLUGIN } from './helpers.mjs';
+import { tmpRepo, harness, hook, userTyped, writeIssue, writeFeature, ISSUE, writeManifest, MANIFEST, addWorktree, workReady, PLUGIN } from './helpers.mjs';
 
 const W = (cwd, file, extra = {}) => hook('gate', { cwd, tool_name: 'Write', tool_input: { file_path: file, content: 'x' }, tool_use_id: 't1', ...extra }, cwd);
 const B = (cwd, command, extra = {}) => hook('gate', { cwd, tool_name: 'Bash', tool_input: { command }, tool_use_id: extra.tool_use_id || 'b1', ...extra }, cwd);
@@ -59,6 +59,7 @@ test('worker dispatch needs a claimed issue; claim is atomic and needs deps', ()
   assert.equal(AGENT(r, 'harness:worker').denied, true);
   writeIssue(r, 'ready', ISSUE());
   writeIssue(r, 'ready', ISSUE({ id: 'F01-I02', after: ['F01-I01'], touch: ['src/modules/billing/**'], do_not_touch: [] }));
+  userTyped(r, 'go');
   assert.equal(harness(r, 'claim', 'F01-I02').code, 1); // dep not done
   assert.equal(harness(r, 'claim', 'F01-I01').code, 0);
   assert.equal(harness(r, 'claim', 'F01-I01').code, 1); // already claimed
@@ -68,7 +69,7 @@ test('worker dispatch needs a claimed issue; claim is atomic and needs deps', ()
 
 test('scenario 3+4: worker scope gate — touch allowed, do_not_touch / main tree / .work denied; Bash open but diffed; a change outside touch is a violation', () => {
   const r = tmpRepo(); workReady(r);
-  writeIssue(r, 'ready', ISSUE());
+  writeIssue(r, 'ready', ISSUE()); userTyped(r, 'go');
   assert.equal(harness(r, 'claim', 'F01-I01').code, 0);
   const wt = addWorktree(r, 'F01-I01');
   // before attach: writes and commands denied, the attach call itself allowed
@@ -102,7 +103,7 @@ test('scenario 3+4: worker scope gate — touch allowed, do_not_touch / main tre
 
 test('a worker Bash call that changes the main tree is a violation too', () => {
   const r = tmpRepo(); workReady(r);
-  writeIssue(r, 'ready', ISSUE());
+  writeIssue(r, 'ready', ISSUE()); userTyped(r, 'go');
   assert.equal(harness(r, 'claim', 'F01-I01').code, 0);
   const wt = addWorktree(r, 'F01-I01');
   assert.equal(harness(wt, 'attach', 'F01-I01').code, 0);
@@ -142,7 +143,7 @@ test('issue and feature validation after a write: unsafe shapes are reported, no
 
 test('review: planner issues cannot be merged without a receipt for the current head', () => {
   const r = tmpRepo(); workReady(r);
-  writeIssue(r, 'ready', ISSUE({ interface_change: true, review: 'planner' }));
+  writeIssue(r, 'ready', ISSUE({ interface_change: true, review: 'planner' })); userTyped(r, 'go');
   assert.equal(harness(r, 'claim', 'F01-I01').code, 0);
   const lease = JSON.parse(fs.readFileSync(path.join(r, '.harness/runtime/leases/F01-I01.json')));
   lease.finished = true; lease.head_sha = 'HEAD'; lease.worktree = r;
@@ -155,6 +156,8 @@ test('session status: feature, outcome, decisions, queue, last interruption — 
   const r = tmpRepo(); harness(r, 'init');
   let s = hook('session', { cwd: r, session_start_reason: 'startup' }, r);
   assert.match(s.out, /no open feature/);
+  assert.match(s.out, /Uncommitted in main tree: \.gitignore/);
+  fs.writeFileSync(path.join(r, '.harness/scratch/discovery.md'), '- open: who approves refunds\n');
   writeFeature(r, { branch: 'feature/identity-read' });
   writeIssue(r, 'ready', ISSUE()); writeIssue(r, 'ready', ISSUE({ id: 'F01-I02', after: ['F01-I01'] }));
   assert.equal(harness(r, 'claim', 'F01-I01').code, 0);
@@ -165,13 +168,50 @@ test('session status: feature, outcome, decisions, queue, last interruption — 
   assert.match(s.out, /Decisions:\n- identity owns users/);
   assert.match(s.out, /Queue: doing F01-I01 · ready F01-I02 · blocked none · done 0/);
   assert.match(s.out, /Last interruption: F01-I01: claimed, worker never attached/);
+  assert.match(s.out, /Discovery in progress: \.harness\/scratch\/discovery\.md/);
   assert.doesNotMatch(s.out, /mode=|No-Build|only the user/);
   assert.ok(s.out.split('\n').length <= 12);
 });
 
+test('handoff check: every third automatic compaction of one session, injected once — manual and other sessions stay silent, the prompt is never stored', () => {
+  const r = tmpRepo(); harness(r, 'init');
+  const compact = (trigger = 'auto') => hook('compact', { cwd: r, session_id: 's1', trigger }, r);
+  const start = (session_id = 's1') => hook('session', { cwd: r, session_id, source: 'compact' }, r).out;
+  userTyped(r, 'PRIVATE-SENTINEL');
+  compact(); compact(); compact('manual');
+  assert.equal(userTyped(r, 'next').out, '');
+  compact();
+  assert.match(userTyped(r, 'next').out, /Handoff check: 3 automatic compactions/);
+  assert.equal(userTyped(r, 'next').out, '', 'injected once, not every prompt');
+  compact(); compact();
+  assert.doesNotMatch(start(), /Handoff check/);
+  compact();
+  assert.match(start(), /Handoff check: 6 automatic compactions/);
+  assert.equal(userTyped(r, 'next').out, '');
+  assert.equal(userTyped(r, 'hi', 's2').out, '');
+  assert.doesNotMatch(start('s2'), /Handoff check/);
+  assert.doesNotMatch(fs.readFileSync(path.join(r, '.harness/runtime/session.json'), 'utf8'), /PRIVATE-SENTINEL/);
+});
+
+test('one stop, not a mode: a feature\'s first claim waits for the user to answer the plan; once started, added issues claim freely', () => {
+  const r = tmpRepo(); harness(r, 'init'); writeFeature(r);
+  userTyped(r, 'do it');
+  writeIssue(r, 'ready', ISSUE());
+  writeIssue(r, 'ready', ISSUE({ id: 'F01-I02', touch: ['src/modules/billing/**'], do_not_touch: [] }));
+  const c = harness(r, 'claim', 'F01-I01');
+  assert.equal(c.code, 1); assert.match(c.err, /show the user the plan/);
+  hook('compact', { cwd: r, session_id: 's1', trigger: 'auto' }, r);
+  assert.equal(harness(r, 'claim', 'F01-I01').code, 1, 'a compaction is not the user answering');
+  userTyped(r, 'looks right, run it');
+  assert.equal(harness(r, 'claim', 'F01-I01').code, 0);
+  writeIssue(r, 'ready', ISSUE({ id: 'F01-I03', touch: ['src/app/**'], do_not_touch: [] })); // inserted mid-run
+  assert.equal(harness(r, 'claim', 'F01-I02').code, 0);
+  assert.equal(harness(r, 'claim', 'F01-I03').code, 0);
+});
+
 test('paths are canonical: a hook cwd through a junction/short name still resolves to the attached worktree lease', () => {
   const r = tmpRepo(); workReady(r);
-  writeIssue(r, 'ready', ISSUE());
+  writeIssue(r, 'ready', ISSUE()); userTyped(r, 'go');
   assert.equal(harness(r, 'claim', 'F01-I01').code, 0);
   const wt = addWorktree(r, 'F01-I01');
   assert.equal(harness(wt, 'attach', 'F01-I01').code, 0);

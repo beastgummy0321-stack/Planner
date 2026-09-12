@@ -11,7 +11,9 @@ v2 (2026-09-11) cut v1's governance layer back to what it always was underneath:
 A planner who dislikes the architecture re-plans. A challenger who sees a simpler route
 sends it back to the planner. An adapter that does not support the stack is not used.
 A reuse scan that finds a package is input for the planner. None of these stop anything.
-Two things do: a worker leaving its scope, and a verification that is red.
+Two things do: a worker leaving its scope, and a verification that is red. And one stop the user asked for,
+which is not a mode: a feature's first issue does not run until the user has answered its carved plan; after that,
+re-plans, added issues and the rest of the queue never ask again.
 
 > **Never optimize the workflow merely because a session ended.** Modify it only when observed
 > evidence reveals a reusable root-cause failure; prefer simplifying or correcting an existing
@@ -55,10 +57,11 @@ Two things do: a worker leaving its scope, and a verification that is red.
 /carve      "Turn what we know into a feature and issues."
 /crank      "Run the queue."
 /retro      "Did this session prove the workflow wrong? Fix the smallest thing, or nothing."
+/handoff    "Save what the next session needs, then continue fresh — or resume from it."
 ```
 
-None is required before another. "This plan is fine, do it" carves and cranks without a
-further command; "/dig" on a running feature is a discussion, not a rollback. The plugin
+None is required before another. "Do it" carves without a further command, and the carved plan is
+shown once: the user's answer, in any words, runs the whole queue; "/dig" on a running feature is a discussion, not a rollback. The plugin
 never answers "type /carve to continue".
 
 `/demo` is a disposable probe specialised for UI, not a stage: one self-contained
@@ -74,6 +77,13 @@ the product is settled, the planner cuts the smallest shared frontend↔backend 
 first issue (in code or Decisions, never a new document), then disjoint frontend (real UI, fake
 adapter) and backend issues that `/crank` runs in parallel, then one wiring issue. Frontend and
 backend are issue specialisations, not agents; the scheduler already exists.
+
+`/handoff` writes no document. A fresh session already receives `harness status` through SessionStart;
+a handoff makes that status and the files it names carry the work: the conversation's unsaved decisions
+(user-confirmed kept apart from agent-chosen and open), rejected routes with reasons, unverified progress
+and the first step go into the open feature's Decisions, or discovery.md when no feature is open, and
+`harness status` is the read-back. Suggesting, saving and starting a new session are separate actions;
+a suggestion is advice at a safe point, never a gate.
 
 ## 4. Files in a target project
 
@@ -103,7 +113,7 @@ choice lives in the feature's Decisions (while the feature is open) or in ARCHIT
 ```
 harness feature start F01        check out feature/<slug> (from the current branch)
 harness queue next               claimable issues: deps done, no touch overlap, dependency changes alone
-harness claim <id>               ready/ → doing/ (atomic rename), lease created
+harness claim <id>               ready/ → doing/ (atomic rename), lease created; a feature's first claim refuses issues newer than the user's last message
 Agent(harness:worker, worktree)  denied unless such a lease exists
   worker: harness attach <id>    lease gets cwd, branch, base_sha; prints issue + module slice; env stays lazy
   worker: implement              PreToolUse: touch / do_not_touch / destructive deny; PostToolUse: diff both trees
@@ -129,7 +139,14 @@ router · metrics in `.harness/runtime/metrics.jsonl` · SessionStart injection 
 outcome, decisions, queue, last interruption (prefixed "stored state is context, not authority":
 the newest user message wins) · `attach` hands the worker the feature's outcome and decisions
 next to its issue, so the user's constraints and non-goals (kept in Decisions, in their words)
-survive the cut into issues. The harness never rewrites, classifies or normalises a user prompt.
+survive the cut into issues. The harness never rewrites, classifies or normalises a user prompt. · status names
+an unfinished discovery.md and uncommitted main-tree files, the facts a `/clear` would otherwise lose · handoff check:
+`hooks/compact.mjs` counts a session's automatic compactions in `runtime/session.json`; every third, SessionStart or
+the next prompt injects one advisory line once — it never blocks, the model judges the safe point. The handoff record
+fields, carrier-first save, read-back, record-as-context resume and the three-compaction cadence are distilled from
+github.com/duoduoler-ops/Table-skills `project-handoff` @ ca51a81 (MIT, © 2026 duoduoler-ops), rewritten for
+harness carriers; its Codex thread automation, per-session reminder state machine and Stop-hook delivery check are
+not carried (§0: advice never blocks).
 
 ## 7. Removed in v2 (and why)
 
@@ -140,7 +157,8 @@ planner review · ticket layer and `deps_approved` · PLAN.md · "unsupported ad
 /carve" · exact-match worker Bash. Each was a locally reasonable rule whose sum turned a
 personal Kanban into a governance framework. The failures they guarded against are still
 covered by §0: scope diff, fingerprinted retries, machine verification, and a planner that is
-free to re-plan.
+free to re-plan. v2.7 brought back one stop, not the mode: after two sessions ran a carved queue the user had never
+seen, a feature's first claim looks at when the user last spoke — never at what they said — and nothing after it.
 
 ## 8. Regression scenarios (test/)
 
@@ -150,4 +168,6 @@ stack / resource kind is skipped, not fatal · checker red at finish and at merg
 retry refused · docs-only fast path · lazy env once · privileged runs once · review receipt at
 head · smoke in the worktree · runtime acceptance and human items · greenfield module ·
 recover after session death · feature branch start → issues merge into it → close merges into
-base · session status shows outcome, decisions, queue, interruption.
+base · session status shows outcome, decisions, queue, discovery, uncommitted files, interruption · handoff check counts
+automatic compactions only, every third, per session, injected once, prompt never stored · one stop: a feature's
+first claim waits for a user message newer than its issues; once started, added issues claim freely.

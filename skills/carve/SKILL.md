@@ -5,7 +5,7 @@ description: Turn a direction into one feature file and atomic issues (Feature -
 
 # /carve — cut the work
 
-`/carve` is an intent: **turn what we know into a feature and its issues.** The planner does the cutting; the main conversation relays approvals and results. If the user's intent was "build it", continue into `/crank` when the queue is ready; if it was "show me the plan", stop and show it.
+`/carve` is an intent: **turn what we know into a feature and its issues.** The planner does the cutting; the main conversation relays approvals and results. It always ends the same way: the plan is shown and the turn goes back to the user once — carving is cheap and reversible, a queue of workers is not. The user's answer to the plan starts `/crank`; from then on nothing asks again.
 
 CLI: `node "${CLAUDE_PLUGIN_ROOT}/bin/harness.mjs" <command>` (called `harness` below).
 
@@ -27,7 +27,7 @@ The planner, in order:
 7. `harness validate`. Delete `.harness/scratch/discovery.md` (its content now lives in the feature file). Probes and prototypes stay in scratch as references until the feature closes.
 
 ## Independent challenge — automatic, when it earns its cost
-The planner asks for one when the architecture changed or is new, the work crosses module boundaries, an issue carries `review: planner`, the risk is high, or it is unsure. Then dispatch `Agent(subagent_type: "harness:challenger")` with **only** the user-confirmed outcome (one paragraph), the paths of `ARCHITECTURE.md`, `.work/features/F01.md` and `.work/ready/`, and read access. Never the planner's reasoning — a reviewer who reads the author's defence is anchored. `CLEAR` → continue. `CHALLENGE` → the planner fixes the draft once and re-runs `harness validate`. A product or architecture disagreement is the one thing that goes to the user. One round; the user never operates this, at most they see "plan reviewed independently, N issues re-cut".
+The planner asks for one when the architecture changed or is new, the work crosses module boundaries, an issue carries `review: planner`, the risk is high, or it is unsure. Then dispatch `Agent(subagent_type: "harness:challenger")` with **only** the user-confirmed outcome (one paragraph), the paths of `ARCHITECTURE.md`, `.work/features/F01.md` and `.work/ready/`, and read access. Never the planner's reasoning — a reviewer who reads the author's defence is anchored. `CLEAR` → continue. `CHALLENGE` → the planner fixes the draft once and re-runs `harness validate`. A product or architecture disagreement is the one thing that goes to the user. One round means no second challenger, not a pass: whatever the planner could not settle goes to the user with the plan. The user never operates this; at most they see "plan reviewed independently, N issues re-cut".
 
 ## Finish
-Show the feature (title, outcome, decisions, branch), the ready issue ids in order, any human acceptance items, whether it was challenged. If the user wanted the work done, continue into `/crank`; otherwise stop here — the plan is on disk and a fresh session can pick it up.
+Show the feature (title, outcome, decisions, branch), the ready issue ids in order, any human acceptance items, the challenge result, and every question still waiting for the user. Then stop — even when the user asked earlier to build it: the first `harness claim` of a feature refuses issues written after the user's last message. Their answer (a go, a change, a question) decides what happens next; a go runs the whole queue through `/crank` without asking again, and re-plans or added issues after that do not stop it. The plan is on disk, so a fresh session can pick it up; when a long discussion led here, that is a stage change worth a `/handoff` suggestion.

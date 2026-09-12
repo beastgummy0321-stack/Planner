@@ -15,6 +15,14 @@
         ]
       }
     ],
+    "PostCompact": [
+      {
+        "matcher": "auto",
+        "hooks": [
+          { "type": "command", "command": "node \"${CLAUDE_PLUGIN_ROOT}/hooks/compact.mjs\"", "timeout": 5 }
+        ]
+      }
+    ],
     "PreToolUse": [
       {
         "matcher": "Write|Edit|MultiEdit|NotebookEdit|Bash|Agent",

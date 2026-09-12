@@ -114,6 +114,13 @@ async function claim(id) {
   const text = fs.readFileSync(issueFile(p, 'ready', id), 'utf8');
   const { issue, errors } = validateIssueText(text, { manifest: readManifest(p.root).manifest });
   if (errors.length) die(`issue invalid:\n  ${errors.join('\n  ')}`);
+  // one stop, not a mode: a feature's queue starts only after the user answered its plan. Only the time of the user's last
+  // message is read, never its words; once any issue of the feature has run, re-plans and added issues claim freely.
+  // No session record means no conversation (a person at a terminal).
+  const fq = Q.featureIssues(p, issue.feature);
+  const spoke = readJson(path.join(p.harness, 'runtime', 'session.json'), null)?.ts;
+  const planned = Math.max(0, ...fq.ready.map((i) => fs.statSync(issueFile(p, 'ready', i)).mtimeMs));
+  if (spoke && !fq.doing.length && !fq.blocked.length && !fq.done.length && planned > spoke) die(`${issue.feature} has not started and its issues were written after the user's last message: show the user the plan (feature, issue order, acceptance, challenge result, open questions) and end the turn; claim after they answer. Nothing asks again once it runs.`);
   // no identical retry: a blocked issue re-enters only after the planner changed it, its dependencies, or the architecture
   const prev = readJson(path.join(p.harness, 'runtime', 'blocked', `${id}.json`), null);
   if (prev) {
