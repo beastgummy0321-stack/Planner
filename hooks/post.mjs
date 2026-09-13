@@ -26,7 +26,9 @@ function afterBash() {
   const lease = readLease(project, base.lease);
   if (!lease) return;
   const bad = [
-    ...changedBetween(base.trees.main, snapshot(project.root)).map((f) => `${f} (main tree)`),
+    // .work/ and .harness/ in the main tree belong to the control plane (claim/release/merge/planner run while workers build);
+    // a worker cannot write them from its worktree (gate.mjs), so a change there is never the worker's doing.
+    ...changedBetween(base.trees.main, snapshot(project.root)).filter((f) => !/^\.(work|harness)\//.test(f)).map((f) => `${f} (main tree)`),
     ...(lease.worktree ? changedBetween(base.trees.worktree, snapshot(lease.worktree)).filter((f) => matchesAny(f, lease.do_not_touch || []) || !matchesAny(f, lease.touch || [])).map((f) => `${f} (outside touch)`) : []),
   ];
   if (!bad.length) return;

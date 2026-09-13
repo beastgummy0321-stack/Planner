@@ -1,6 +1,6 @@
 {
   "name": "harness",
-  "version": "2.8.0",
+  "version": "2.8.1",
   "description": "A planning layer that thinks freely, a Kanban, and an isolated executor. /dig (discuss), /demo (clickable fake-data UI to react to), /carve (planner: feature + issues on one branch, optional independent challenge), /crank (control plane: claim, worktree, scope gate, verify, merge, integrate, close), /retro (end-of-session workflow correction, root cause only), /handoff (save what the next session needs into existing state, read it back, continue fresh), /dist (distill an outside repo's capability, not its architecture). Anything may advise; only execution isolation and failed verification may block.",
   "author": {
     "name": "beastgummy0321-stack"

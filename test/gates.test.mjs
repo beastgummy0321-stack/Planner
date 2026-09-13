@@ -113,6 +113,21 @@ test('a worker Bash call that changes the main tree is a violation too', () => {
   assert.equal(post.code, 2); assert.match(post.err, /index\.ts \(main tree\)/);
 });
 
+test('a control-plane move of .work/ files in the main tree during a worker Bash call is not a violation', () => {
+  const r = tmpRepo(); workReady(r);
+  writeIssue(r, 'ready', ISSUE()); userTyped(r, 'go');
+  assert.equal(harness(r, 'claim', 'F01-I01').code, 0);
+  const wt = addWorktree(r, 'F01-I01');
+  assert.equal(harness(wt, 'attach', 'F01-I01').code, 0);
+  B(wt, 'echo x', { ...WORKER, tool_use_id: 'b3' });
+  fs.mkdirSync(path.join(r, '.work/ready'), { recursive: true });
+  fs.writeFileSync(path.join(r, '.work/ready/F01-I02.md'), '# another issue claimed by the control plane\n'); // main tree, .work/
+  fs.mkdirSync(path.join(r, '.harness/runtime'), { recursive: true });
+  fs.writeFileSync(path.join(r, '.harness/runtime/note.json'), '{}\n');
+  const post = hook('post', { cwd: wt, tool_name: 'Bash', tool_input: { command: 'echo x' }, tool_use_id: 'b3', ...WORKER }, wt);
+  assert.equal(post.code, 0, post.err);
+});
+
 test('issue and feature validation after a write: unsafe shapes are reported, not denied', () => {
   const r = tmpRepo(); harness(r, 'init');
   const f = writeIssue(r, 'ready', ISSUE({ interface_change: true, review: 'none' }));
