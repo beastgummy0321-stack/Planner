@@ -139,6 +139,9 @@ async function claim(id) {
     touch: issue.touch, do_not_touch: issue.do_not_touch,
     verify_commands: issue.verify, privileged_commands: issue.privileged,
     review: issue.review, interface_change: issue.interface_change, violations: [],
+    // what this attempt tried: block compares the re-queued text against THIS, so a planner may rewrite the
+    // ticket before or after `harness block` without confusing the identical-retry guard (drill 4, 2026-09-13)
+    issue_fingerprint: issueFingerprint(text, fs.existsSync(path.join(p.root, 'ARCHITECTURE.md')) ? fs.readFileSync(path.join(p.root, 'ARCHITECTURE.md'), 'utf8') : ''),
   };
   if (fs.existsSync(leasePath(p, id))) die(`lease for ${id} already exists`);
   writeLease(p, lease);
