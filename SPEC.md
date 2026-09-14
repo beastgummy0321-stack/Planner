@@ -147,7 +147,11 @@ the next prompt injects one advisory line once — it never blocks, the model ju
 fields, carrier-first save, read-back, record-as-context resume and the three-compaction cadence are distilled from
 github.com/duoduoler-ops/Table-skills `project-handoff` @ ca51a81 (MIT, © 2026 duoduoler-ops), rewritten for
 harness carriers; its Codex thread automation, per-session reminder state machine and Stop-hook delivery check are
-not carried (§0: advice never blocks).
+not carried (§0: advice never blocks). · `/dig` asks like a grilling: a design tree, the whole frontier
+per round with no question cap, a recommended answer per question, answers pressure-tested, vague agreement
+settling nothing. The design-tree/frontier/round kernel and question format are distilled from
+github.com/mattpocock/skills `grilling` (MIT, © 2026 Matt Pocock); its sub-agent fact lookup maps to
+`harness:utility`, and "done when the frontier is empty" yields to the user deciding earlier.
 
 ## 7. Removed in v2 (and why)
 
