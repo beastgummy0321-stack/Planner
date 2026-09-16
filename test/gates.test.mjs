@@ -85,6 +85,7 @@ test('scenario 3+4: worker scope gate — touch allowed, do_not_touch / main tre
   assert.equal(W(wt, path.join(r, 'src/modules/identity/x.ts'), WORKER).denied, true); // main tree via absolute path
   assert.equal(W(wt, 'ARCHITECTURE.md', WORKER).denied, true);
   assert.equal(W(wt, '.work/ready/F01-I02.md', WORKER).denied, true);
+  assert.equal(harness(wt, 'env').code, 0);
   // Bash is open (not exact-match any more) except destructive
   assert.equal(B(wt, 'npm test', WORKER).denied, false);
   assert.equal(B(wt, 'git grep -n foo src', WORKER).denied, false);
@@ -175,6 +176,7 @@ test('session status: feature, outcome, decisions, queue, last interruption — 
   fs.writeFileSync(path.join(r, '.harness/scratch/discovery.md'), '- open: who approves refunds\n');
   writeFeature(r, { branch: 'feature/identity-read' });
   writeIssue(r, 'ready', ISSUE()); writeIssue(r, 'ready', ISSUE({ id: 'F01-I02', after: ['F01-I01'] }));
+  userTyped(r, 'go');
   assert.equal(harness(r, 'claim', 'F01-I01').code, 0);
   s = hook('session', { cwd: r, session_start_reason: 'resume' }, r);
   assert.match(s.out, /Feature: F01 — Identity read model \(branch feature\/identity-read, main tree is on main\)/);
@@ -208,15 +210,17 @@ test('handoff check: every third automatic compaction of one session, injected o
   assert.doesNotMatch(fs.readFileSync(path.join(r, '.harness/runtime/session.json'), 'utf8'), /PRIVATE-SENTINEL/);
 });
 
-test('one stop, not a mode: a feature\'s first claim waits for the user to answer the plan; once started, added issues claim freely', () => {
+test('explicit authorization is required; a later message or compaction grants nothing', () => {
   const r = tmpRepo(); harness(r, 'init'); writeFeature(r);
   userTyped(r, 'do it');
   writeIssue(r, 'ready', ISSUE());
   writeIssue(r, 'ready', ISSUE({ id: 'F01-I02', touch: ['src/modules/billing/**'], do_not_touch: [] }));
   const c = harness(r, 'claim', 'F01-I01');
-  assert.equal(c.code, 1); assert.match(c.err, /show the user the plan/);
+  assert.equal(c.code, 1); assert.match(c.err, /execution authorization missing/);
   hook('compact', { cwd: r, session_id: 's1', trigger: 'auto' }, r);
   assert.equal(harness(r, 'claim', 'F01-I01').code, 1, 'a compaction is not the user answering');
+  userTyped(r, 'do not implement');
+  assert.equal(harness(r, 'claim', 'F01-I01').code, 1);
   userTyped(r, 'looks right, run it');
   assert.equal(harness(r, 'claim', 'F01-I01').code, 0);
   writeIssue(r, 'ready', ISSUE({ id: 'F01-I03', touch: ['src/app/**'], do_not_touch: [] })); // inserted mid-run

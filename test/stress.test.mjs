@@ -100,7 +100,8 @@ test('scenario 23: the session dies after attach + partial edit — harness reco
   assert.ok(fs.existsSync(path.join(r, '.harness/runtime/leases/F01-I01.json')));
   // new session
   userTyped(r, 'hi', 's2');
-  const w = harness(r, 'recover');
+  assert.match(harness(r, 'recover').out, /nothing to recover/);
+  const w = harness(r, 'recover', '--ended-session', 's1');
   assert.equal(w.code, 0, w.err); assert.match(w.out, /recovered F01-I01.*partial diff saved/);
   assert.ok(fs.existsSync(path.join(r, '.work/ready/F01-I01.md')));
   assert.ok(!fs.existsSync(path.join(r, '.harness/runtime/leases/F01-I01.json')));

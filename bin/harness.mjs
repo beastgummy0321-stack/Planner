@@ -3,17 +3,18 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {
-  QUEUE_DIRS, findProject, readJson, writeJsonAtomic, readLease, writeLease, listLeases, leasePath, tryGit, norm, worktreeRoot, isInside, issueFingerprint,
+  sourceFingerprint, assertNoWorkerCommands, git, findLeaseByCwd, QUEUE_DIRS, findProject, readJson, writeJsonAtomic, readLease, writeLease, listLeases, leasePath, tryGit, norm, worktreeRoot, isInside, issueFingerprint,
 } from '../lib/core.mjs';
 import { readManifest, validateIssueFile, validateIssueText, validateFeatureFile } from '../lib/validate.mjs';
 import { statusText, section } from '../lib/status.mjs';
-import { planAdapter, applyAdapter, runChecker, proveChecker, setupEnv, detectStack } from '../lib/adapters.mjs';
+import { planAdapter, applyAdapter, runChecker, proveChecker, ensureEnv } from '../lib/adapters.mjs';
+import * as A from '../lib/authority.mjs';
 import * as Q from '../lib/queue.mjs';
 
 const [cmd, ...args] = process.argv.slice(2);
 const cwd = process.cwd();
 
-const commands = { init, status, validate, feature, recover, claim, attach, release, adapter, env, queue: queueCmd, finish, review, merge, block, diff, integrate, close, help };
+const commands = { authorize, revoke, worktree, init, status, validate, feature, recover, claim, attach, release, adapter, env, queue: queueCmd, finish, review, merge, block, diff, integrate, close, help };
 // metrics: one line per CLI call in .harness/runtime/metrics.jsonl (gitignored, never injected into any context)
 const t0 = Date.now();
 process.on('exit', (code) => {
@@ -29,7 +30,7 @@ try {
 function out(s) { process.stdout.write(s + '\n'); }
 function die(msg) { throw new Error(msg); }
 function project() { return findProject(cwd) || die('no .harness/ here — run `harness init` in the project root'); }
-function session() { return readJson(path.join(findProject(cwd).harness, 'runtime', 'session.json'), null)?.session_id || null; }
+function session() { if (process.env.HARNESS_SESSION_ID) return process.env.HARNESS_SESSION_ID; return readJson(path.join(findProject(cwd).harness, 'runtime', 'session.json'), null)?.session_id || null; }
 
 async function help() {
   out(`harness <command>
@@ -37,20 +38,23 @@ async function help() {
   status               open feature, outcome, decisions, queue, interrupted work (what SessionStart injects)
   validate             check ARCHITECTURE.md (if any), every feature file and every issue file
   feature start <F01>  check out the feature's branch (from its frontmatter); issues branch from and merge into it
-  recover              re-queue issues whose session died (partial diff saved under .harness/runtime/logs/)
+  authorize <F> "scope" record existing user execution permission
+  revoke <F>           withdraw execution permission
+  worktree <id>        create a linked worktree for a claimed issue
+  recover --ended-session <id>  explicitly recover a confirmed ended session (partial diff saved under .harness/runtime/logs/)
   claim <id>           ready/ → doing/ atomically and create the lease
   attach <id>          (worker, inside its worktree) bind cwd/branch/base_sha to the lease; env stays cold until needed
   release <id>         doing/ → ready/, drop the lease and its worktree
   adapter plan|apply --approved|check|prove   import/ownership checker for the stack (ts, python); other stacks: skipped
-  env                  (worker, inside worktree) frozen dependency install now (normally lazy)
-  queue next           claimable issues (deps done, no overlap, dependency changes alone)
-  finish <id>          scope post-diff · checker · issue verify · typecheck/build → green or blocked/
+  env                  (worker, inside worktree) frozen dependency install now (cached by dependency inputs)
+  queue next [limit]   claimable issues (deps done, no overlap, dependency changes alone)
+  finish <id>          scope post-diff · checker · issue verify · typecheck/build → green, repairable, or scope-blocked
   review <id> approve  record the planner's approval for the current worktree head (needed when review: planner)
   merge <id>           merge the issue branch into the feature branch, integration checker, smoke in the worktree, → done/
   block <id> "<reason>"     doing/ → blocked/ with reason; worktree discarded
   diff <id> [--stat]   diff of the issue branch against its base (reviewers: --stat first, then read the files)
   integrate feature <F01>   checker · project test/build · feature verify · smoke · runtime acceptance; lists human items
-  close feature <F01>       delete done issues + feature file, merge the feature branch into its base, clean up`);
+  close feature <F01> [--human-approved]  delete done issues + feature file, merge the feature branch into its base, clean up`);
 }
 
 async function init() {
@@ -97,9 +101,9 @@ async function feature(sub, id) {
   out(JSON.stringify(Q.startFeature(p, id || die('feature start <F01>')), null, 2));
 }
 
-async function recover() {
+async function recover(flag, endedSession) {
   const p = project();
-  const r = Q.recover(p, session());
+  const r = Q.recover(p, session(), flag === '--ended-session' ? endedSession : null);
   for (const x of r) out(`recovered ${x.issue}: session ${x.session || '?'} is gone; re-queued${x.log ? ', partial diff saved to ' + x.log : ''}`);
   if (!r.length) out('nothing to recover');
 }
@@ -114,22 +118,17 @@ async function claim(id) {
   const text = fs.readFileSync(issueFile(p, 'ready', id), 'utf8');
   const { issue, errors } = validateIssueText(text, { manifest: readManifest(p.root).manifest });
   if (errors.length) die(`issue invalid:\n  ${errors.join('\n  ')}`);
-  // one stop, not a mode: a feature's queue starts only after the user answered its plan. Only the time of the user's last
-  // message is read, never its words; once any issue of the feature has run, re-plans and added issues claim freely.
-  // No session record means no conversation (a person at a terminal).
-  const fq = Q.featureIssues(p, issue.feature);
-  const spoke = readJson(path.join(p.harness, 'runtime', 'session.json'), null)?.ts;
-  const planned = Math.max(0, ...fq.ready.map((i) => fs.statSync(issueFile(p, 'ready', i)).mtimeMs));
-  if (spoke && !fq.doing.length && !fq.blocked.length && !fq.done.length && planned > spoke) die(`${issue.feature} has not started and its issues were written after the user's last message: show the user the plan (feature, issue order, acceptance, challenge result, open questions) and end the turn; claim after they answer. Nothing asks again once it runs.`);
+  A.requireAuthorization(p, issue.feature);
   // no identical retry: a blocked issue re-enters only after the planner changed it, its dependencies, or the architecture
   const prev = readJson(path.join(p.harness, 'runtime', 'blocked', `${id}.json`), null);
   if (prev) {
     const manifestText = fs.existsSync(path.join(p.root, 'ARCHITECTURE.md')) ? fs.readFileSync(path.join(p.root, 'ARCHITECTURE.md'), 'utf8') : '';
-    if (issueFingerprint(text, manifestText) === prev.fingerprint) die(`identical retry refused: ${id} was blocked (${prev.reason}) and neither the issue, its dependencies nor ARCHITECTURE.md changed since. Re-dispatching the same input to another worker only burns tokens; the planner must change something first.`);
+    if (issueFingerprint(text, manifestText, sourceFingerprint(p.root)) === prev.fingerprint) die(`identical retry refused: ${id} was blocked (${prev.reason}) and neither the issue, its dependencies nor ARCHITECTURE.md changed since. Re-dispatching the same input to another worker only burns tokens; the planner must change something first.`);
   }
   const missing = (issue.after || []).filter((a) => !Q.isDone(p, a));
   if (missing.length) die(`dependencies not done: ${missing.join(', ')}`);
   for (const l of listLeases(p)) {
+    if (Q.touchesDeps(l) || Q.touchesDeps(issue) || l.interface_change || issue.interface_change) die(`dependency/interface-changing issue requires exclusive execution`);
     if (Q.overlap(l.touch, issue.touch)) die(`touch overlaps with active issue ${l.issue}; run sequentially`);
   }
   // atomic claim: rename fails if another process moved it first
@@ -141,11 +140,11 @@ async function claim(id) {
     review: issue.review, interface_change: issue.interface_change, violations: [],
     // what this attempt tried: block compares the re-queued text against THIS, so a planner may rewrite the
     // ticket before or after `harness block` without confusing the identical-retry guard (drill 4, 2026-09-13)
-    issue_fingerprint: issueFingerprint(text, fs.existsSync(path.join(p.root, 'ARCHITECTURE.md')) ? fs.readFileSync(path.join(p.root, 'ARCHITECTURE.md'), 'utf8') : ''),
+    issue_fingerprint: issueFingerprint(text, fs.existsSync(path.join(p.root, 'ARCHITECTURE.md')) ? fs.readFileSync(path.join(p.root, 'ARCHITECTURE.md'), 'utf8') : '', sourceFingerprint(p.root)),
   };
   if (fs.existsSync(leasePath(p, id))) die(`lease for ${id} already exists`);
   writeLease(p, lease);
-  out(`claimed ${id}: ready/ → doing/. Dispatch Agent(subagent_type: "harness:worker", isolation: "worktree") with the issue; the worker must run attach first.`);
+  out(`claimed ${id}: ready/ → doing/. Create its worktree, dispatch a native worker there, and run attach first.`);
 }
 
 async function attach(id) {
@@ -157,8 +156,8 @@ async function attach(id) {
   if (lease.worktree && lease.worktree !== norm(top)) die(`lease ${id} is already attached to ${lease.worktree}`);
   lease.worktree = norm(top);
   lease.branch = tryGit(top, 'branch', '--show-current') || null;
-  lease.base_sha = tryGit(top, 'rev-parse', 'HEAD');
-  lease.base = tryGit(p.root, 'branch', '--show-current') || 'main';
+  lease.base_sha ||= tryGit(top, 'rev-parse', 'HEAD');
+  lease.base ||= tryGit(p.root, 'branch', '--show-current') || 'main';
   lease.attached_at = Date.now();
   writeLease(p, lease);
   const issue = fs.readFileSync(issueFile(p, 'doing', id), 'utf8');
@@ -175,10 +174,10 @@ async function attach(id) {
     .map(([n, m]) => `  ${n}: root ${m.root} · public ${m.public} · may_depend_on [${(m.may_depend_on || []).join(', ')}] · owns ${JSON.stringify(m.owns)}`);
   // an approved prototype lives in the main tree's scratch (gitignored, so absent from the worktree): hand the worker its absolute path
   const protoDir = path.join(p.harness, 'scratch', 'prototype');
-  const protos = fs.existsSync(protoDir) ? fs.readdirSync(protoDir).map((d) => path.join(protoDir, d).replace(/\\/g, '/')) : [];
+  const protos = fs.existsSync(protoDir) ? fs.readdirSync(protoDir).filter(d => (feat?.body || '').includes(`prototype/${d}`) || issue.includes(`prototype/${d}`)).map((d) => path.join(protoDir, d).replace(/\\/g, '/')) : [];
   out(`attached ${id} to ${lease.worktree} (branch ${lease.branch}, base ${lease.base_sha.slice(0, 8)})\n` +
       (protos.length ? `prototype (visual reference, read only): ${protos.join(', ')}\n` : '') +
-      `environment: lazy (dependencies install once, before the first runtime command)\n` +
+      `environment: lazy (run harness env before dependency-backed commands; cached by inputs)\n` +
       `touch: ${JSON.stringify(lease.touch)}${lease.do_not_touch?.length ? `\ndo_not_touch: ${JSON.stringify(lease.do_not_touch)}` : ''}\n` +
       `verify (finish re-runs these): ${JSON.stringify(lease.verify_commands)}${lease.privileged_commands?.length ? `\nprivileged (run once, by you): ${JSON.stringify(lease.privileged_commands)}` : ''}\n` +
       `Bash: anything non-destructive; every call is diffed — a change outside touch blocks the issue\n` +
@@ -227,15 +226,15 @@ Ask the user to approve this once, then run: harness adapter apply --approved`);
 async function env() {
   const p = project();
   const top = worktreeRoot(cwd) || die('not in a git tree');
-  const { manifest } = readManifest(p.root);
-  const r = setupEnv(top, manifest?.stack || detectStack(top));
+  const lease = findLeaseByCwd(p, top) || die('env requires an attached worktree');
+  const r = ensureEnv(p, lease);
   out(JSON.stringify(r, null, 2));
   if (!r.ok) process.exit(1);
 }
-async function queueCmd(sub) {
+async function queueCmd(sub, limit) {
   const p = project();
   if (sub !== 'next') die('queue next');
-  out(JSON.stringify(Q.next(p), null, 2));
+  out(JSON.stringify(Q.next(p, limit === undefined ? 2 : Number(limit)), null, 2));
 }
 async function finish(id) {
   const p = project(); id || die('finish <id>');
@@ -268,8 +267,26 @@ async function integrate(kind, id) {
   out(JSON.stringify(r, null, 2));
   if (!r.ok) process.exit(1);
 }
-async function close(kind, id) {
+async function close(kind, id, humanFlag) {
   const p = project();
   if (kind !== 'feature') die('close feature <F01>');
-  out(JSON.stringify(Q.closeFeature(p, id || die('close feature <F01>')), null, 2));
+  out(JSON.stringify(Q.closeFeature(p, id || die('close feature <F01>'), humanFlag === '--human-approved'), null, 2));
+}
+
+async function authorize(id, ...instruction) {
+  const p = project(); assertNoWorkerCommands(p);
+  out(JSON.stringify(A.authorize(p, id, instruction.join(' ')), null, 2));
+}
+async function revoke(id) { A.revoke(project(), id); out(`revoked ${id}; stop active host workers safely`); }
+async function worktree(id) {
+  const p = project(), lease = readLease(p, id);
+  if (!lease) die('claim the issue before creating its worktree');
+  const issue = Q.readIssue(p, 'doing', id).issue;
+  A.requireAuthorization(p, issue.feature);
+  const feature = Q.readFeature(p, issue.feature);
+  const branch = feature?.data.branch || git(p.root, 'branch', '--show-current');
+  const target = path.join(p.harness, 'worktrees', id);
+  if (fs.existsSync(target)) die('worktree path already exists; inspect its lease instead of replacing it');
+  git(p.root, 'worktree', 'add', '-b', `harness/${id}`, target, branch);
+  out(JSON.stringify({ issue: id, worktree: norm(target), branch: `harness/${id}` }));
 }

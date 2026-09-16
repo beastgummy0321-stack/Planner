@@ -1,0 +1,20 @@
+{
+  "name": "harness",
+  "version": "3.0.0",
+  "description": "Scoped planning, isolated feature execution, and evidence-based verification.",
+  "author": {
+    "name": "beastgummy0321-stack"
+  },
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Planner Harness",
+    "shortDescription": "Plan only as much as the task needs",
+    "developerName": "beastgummy0321-stack",
+    "category": "Productivity",
+    "capabilities": [
+      "Write"
+    ],
+    "longDescription": "Proportionate planning and isolated execution with explicit scope, recoverable work, and evidence-based verification.",
+    "defaultPrompt": "Use the smallest Planner workflow appropriate to my task, preserve existing authorization boundaries, and verify the requested outcome."
+  }
+}

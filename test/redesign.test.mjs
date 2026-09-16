@@ -53,12 +53,12 @@ test('scenario 13: utility routing — long red output goes to a log file, the b
   const fin = harness(r, 'finish', 'F01-I01');
   assert.equal(fin.code, 1);
   const res = JSON.parse(fin.out);
-  assert.ok(res.log && /harness:utility/.test(res.log), JSON.stringify(res));
-  const body = fs.readFileSync(path.join(r, '.work/blocked/F01-I01.md'), 'utf8');
-  assert.ok((body.match(/^- line/gm) || []).length <= 8, 'blocked body carries only a tail');
-  const logs = fs.readdirSync(path.join(r, '.harness/runtime/logs'));
-  assert.equal(logs.length, 1);
-  assert.ok(fs.readFileSync(path.join(r, '.harness/runtime/logs', logs[0]), 'utf8').includes('line 0'));
+  assert.equal(res.repairable, true);
+  assert.ok(fs.existsSync(res.log));
+  assert.ok(res.evidence.length <= 20);
+  assert.ok(fs.existsSync(path.join(r, '.work/doing/F01-I01.md')));
+  assert.ok(fs.readFileSync(res.log, 'utf8').includes('line 0'));
+
 });
 
 test('scenario 14: runtime-only defect — unit/typecheck/build green but smoke red: the issue cannot complete', { timeout: 120000 }, () => {
@@ -87,7 +87,7 @@ test('acceptance contract: feature runtime slot runs at integration, human items
   assert.ok(fs.existsSync(path.join(r, '.work/features/F01.md')), 'integration never closes');
 });
 
-test('scenario 16: a disposable probe lives in scratch and is gone once the feature closes; a feature with no branch works in place', { timeout: 120000 }, () => {
+test('scenario 16: a disposable probe in scratch is retained for scoped cleanup after close; a feature with no branch works in place', { timeout: 120000 }, () => {
   const r = tmpRepo(); workReady(r);
   const probe = path.join(r, '.harness/scratch/probes/perf/bench.mjs');
   fs.mkdirSync(path.dirname(probe), { recursive: true }); fs.writeFileSync(probe, 'x');
@@ -100,13 +100,13 @@ test('scenario 16: a disposable probe lives in scratch and is gone once the feat
   assert.match(harness(r, 'feature', 'start', 'F01').out, /no branch declared/);
   writeIssue(r, 'ready', ISSUE({ verify: ['npm test'] }));
   const wt = workerDoes(r, 'F01-I01', (wt) => fs.writeFileSync(path.join(wt, 'src/modules/identity/d.ts'), 'export const d = 1;\n'));
-  assert.match(harness(wt, 'attach', 'F01-I01').out, /prototype \(visual reference, read only\): \S*scratch\/prototype\/dash/, 'attach hands the worker the prototype path');
+  assert.doesNotMatch(harness(wt, 'attach', 'F01-I01').out, /scratch\/prototype\/dash/, 'unreferenced prototypes do not enter issue context');
   assert.equal(harness(r, 'finish', 'F01-I01').code, 0);
   assert.equal(harness(r, 'merge', 'F01-I01').code, 0);
   assert.equal(harness(r, 'integrate', 'feature', 'F01').code, 0);
   const cl = harness(r, 'close', 'feature', 'F01'); assert.equal(cl.code, 0, cl.err);
   assert.equal(JSON.parse(cl.out).merged, undefined);
   assert.equal(g(r, 'branch', '--show-current'), 'main');
-  assert.ok(!fs.existsSync(path.join(r, '.harness/scratch/probes')), 'scratch cleared at close');
-  assert.ok(!fs.existsSync(path.join(r, '.harness/scratch/prototype')), 'prototype cleared at close');
+  assert.ok(fs.existsSync(path.join(r, '.harness/scratch/probes')), 'unowned scratch retained');
+  assert.ok(fs.existsSync(path.join(r, '.harness/scratch/prototype')), 'unowned prototype retained');
 });

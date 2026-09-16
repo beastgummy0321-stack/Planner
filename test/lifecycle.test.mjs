@@ -161,7 +161,7 @@ function lifecycle(r) {
   assert.equal(res.ok, true); assert.equal(res.review, 'none');
   assert.match(harness(r, 'diff', 'F01-I01', '--stat').out, /read\.ts \|/);
   assert.ok(fs.readFileSync(path.join(r, '.harness/runtime/metrics.jsonl'), 'utf8').split('\n').some((l) => l.includes('"cmd":"finish"')));
-  assert.equal(harness(r, 'merge', 'F01-I01').code, 0);
+  { const result = harness(r, 'merge', 'F01-I01'); assert.equal(result.code, 0, result.err + result.out); }
   assert.equal(g(r, 'branch', '--show-current'), 'feature/identity-read', 'merged into the feature branch');
   assert.ok(fs.existsSync(path.join(r, '.work/done/F01-I01.md')));
   assert.ok(fs.existsSync(path.join(r, 'src/modules/identity/read.ts')));
@@ -178,8 +178,11 @@ function lifecycle(r) {
   fs.writeFileSync(path.join(wt2, 'src/modules/identity/bad.ts'), "import { payments } from '../billing/schema';\nexport const p = payments;\n");
   fin = harness(r, 'finish', 'F01-I02');
   assert.equal(fin.code, 1);
+  assert.equal(JSON.parse(fin.out).repairable, true);
+  assert.ok(fs.existsSync(wt2), 'repair preserves worktree');
+  assert.equal(harness(r, 'block', 'F01-I02', 'requires planner decision').code, 0);
   assert.ok(fs.existsSync(path.join(r, '.work/blocked/F01-I02.md')));
-  assert.match(fs.readFileSync(path.join(r, '.work/blocked/F01-I02.md'), 'utf8'), /## Blocked[\s\S]*container checker/);
+  assert.match(fs.readFileSync(path.join(r, '.work/blocked/F01-I02.md'), 'utf8'), /## Blocked[\s\S]*requires planner decision/);
   assert.ok(!fs.existsSync(wt2), 'worktree discarded');
   assert.ok(!fs.existsSync(path.join(r, '.harness/runtime/leases/F01-I02.json')));
   // scenario 15: moving the unchanged issue back to ready is an identical retry → claim refuses
@@ -202,7 +205,7 @@ function lifecycle(r) {
   const ir = JSON.parse(it.out);
   assert.deepEqual(ir.human, ['label reads naturally in zh-TW']);
   assert.ok(ir.steps.some((s) => s.step === 'npm test' && s.ok));
-  const cl = harness(r, 'close', 'feature', 'F01');
+  const cl = harness(r, 'close', 'feature', 'F01', '--human-approved');
   assert.equal(cl.code, 0, cl.err); assert.match(JSON.parse(cl.out).merged, /feature\/identity-read → main/);
   assert.equal(g(r, 'branch', '--show-current'), 'main');
   assert.equal(g(r, 'branch', '--list', 'feature/identity-read'), '');

@@ -19,6 +19,7 @@ export function tmpRepo() {
   fs.writeFileSync(path.join(dir, 'src/modules/billing/index.ts'), 'export const b = 1;\n');
   fs.writeFileSync(path.join(dir, 'src/app/main.ts'), '');
   fs.writeFileSync(path.join(dir, 'package.json'), '{"name":"t","version":"0.0.0","scripts":{"test":"node -e 0"}}\n');
+  fs.writeFileSync(path.join(dir, '.gitignore'), 'node_modules/\n');
   g('add', '.');
   g('commit', '-qm', 'init');
   return dir;
@@ -40,7 +41,12 @@ export function hook(name, input, cwd) {
 
 // UserPromptSubmit only records which session is alive (lease ownership for `harness recover`)
 export function userTyped(cwd, prompt, session = 's1') {
-  return hook('prompt', { cwd, prompt, session_id: session }, cwd);
+  const result = hook('prompt', { cwd, prompt, session_id: session }, cwd);
+  if (/^(go|looks right, run it)$/.test(prompt)) {
+    const dir = path.join(cwd, '.work/features');
+    if (fs.existsSync(dir)) for (const f of fs.readdirSync(dir).filter(f => f.endsWith('.md'))) harness(cwd, 'authorize', f.slice(0,-3), prompt);
+  }
+  return result;
 }
 
 export function writeIssue(cwd, dir, data, body = '# Objective\nx\n# Done\ny\n# Verify\nz\n# Blocked if\nw\n') {

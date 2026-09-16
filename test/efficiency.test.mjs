@@ -31,6 +31,7 @@ test('scenario 37: a copy-only issue never installs dependencies — attach, wor
     const wt = workerDoes(r, 'F01-I01', (w) => fs.writeFileSync(path.join(w, 'docs/a.md'), 'buy today\n'));
     assert.equal(npm.calls(), 0, 'attach must not install');
     assert.equal(B(wt, verify, WORKER).denied, false);
+    hook('post', {cwd: wt, tool_name:'Bash', tool_use_id:'b1'}, wt);
     assert.equal(npm.calls(), 0, 'a git command needs no runtime');
     const fin = harness(r, 'finish', 'F01-I01'); assert.equal(fin.code, 0, fin.out + fin.err);
     assert.ok(JSON.parse(fin.out).steps.some((s) => s.step === 'container checker' && s.skipped));
@@ -67,10 +68,15 @@ test('scenario 38: the first runtime command installs exactly once; the second c
     writeIssue(r, 'ready', ISSUE({ verify: ['npm test'] }));
     const wt = workerDoes(r, 'F01-I01', (w) => fs.writeFileSync(path.join(w, 'src/modules/identity/x.ts'), 'export const x = 1;\n'));
     assert.equal(npm.calls(), 0);
+    assert.equal(B(wt, 'npm test', WORKER).denied, true);
+    assert.equal(npm.calls(), 0, 'hook never installs');
+    assert.equal(harness(wt, 'env').code, 0);
     assert.equal(B(wt, 'npm test', WORKER).denied, false);
+    hook('post', {cwd: wt, tool_name:'Bash', tool_use_id:'b1'}, wt);
     assert.equal(npm.calls(), 1, 'install ran once before the first runtime command');
-    assert.equal(JSON.parse(fs.readFileSync(path.join(r, '.harness/runtime/leases/F01-I01.json'), 'utf8')).env_ready, true);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(r, '.harness/runtime/leases/F01-I01.json'), 'utf8')).env_ready.length, 64);
     assert.equal(B(wt, 'npm test', { ...WORKER, tool_use_id: 'b2' }).denied, false);
+    hook('post', {cwd: wt, tool_name:'Bash', tool_use_id:'b2'}, wt);
     assert.equal(npm.calls(), 1, 'no duplicate setup');
     const fin = harness(r, 'finish', 'F01-I01'); assert.equal(fin.code, 0, fin.out + fin.err);
     assert.equal(npm.calls(), 2, 'finish ran `npm test` (stub) but not the install again');
