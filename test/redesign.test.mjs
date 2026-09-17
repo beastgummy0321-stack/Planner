@@ -68,7 +68,12 @@ test('scenario 14: runtime-only defect — unit/typecheck/build green but smoke 
   assert.equal(harness(r, 'finish', 'F01-I01').code, 0);
   const m = harness(r, 'merge', 'F01-I01');
   assert.equal(m.code, 1); assert.match(m.out, /runtime smoke red/);
-  assert.ok(fs.existsSync(path.join(r, '.work/blocked/F01-I01.md')));
+  assert.equal(JSON.parse(m.out).repairable, true);
+  assert.ok(fs.existsSync(path.join(r, '.work/doing/F01-I01.md')));
+  const lease = JSON.parse(fs.readFileSync(path.join(r, '.harness/runtime/leases/F01-I01.json'), 'utf8'));
+  assert.equal(lease.finished, false);
+  assert.ok(fs.existsSync(path.join(lease.worktree, 'src/modules/identity/b.ts')), 'worker result retained');
+  assert.equal(g(lease.worktree, 'rev-parse', 'HEAD').trim(), lease.head_sha);
   assert.ok(!fs.existsSync(path.join(r, 'src/modules/identity/b.ts')), 'merge was rolled back');
   assert.equal(g(r, 'status', '--porcelain').split('\n').filter((l) => !l.includes('.work/')).filter(Boolean).length, 0);
 });

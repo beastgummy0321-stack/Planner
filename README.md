@@ -37,7 +37,7 @@ existing user authorization -> authorize feature -> claim issue
 
 Record the actual approved scope once with `authorize F01 "<user instruction>"`. A later message is not approval. `revoke F01` withdraws it. Sensitive external actions retain their own permission requirements. Use `worktree F01-I01` after claim; run `attach F01-I01` in the returned directory. Run `env` there only when runtime dependencies are needed. `queue next [limit]` defaults to two candidates; dependency and interface changes run exclusively.
 
-`finish` retains ordinary failing work for repair. A scope violation blocks. Identical verification commands are deduplicated within a phase; merged-tree and final acceptance checks remain distinct. `close` requires a fresh successful integration receipt. Human acceptance items additionally require actual user acceptance recorded with `--human-approved`.
+`finish` and failed merge checks retain ordinary failing work for repair. A scope violation blocks. Identical verification commands are deduplicated within a phase; merged-tree and final acceptance checks remain distinct. `close` requires a fresh successful integration receipt. Human acceptance items additionally require actual user acceptance recorded with `--human-approved`.
 
 `recover` does nothing by default. After the host confirms a session has ended, use `recover --ended-session <id>`. Prefer an explicit per-run `HARNESS_SESSION_ID` on hosts that do not deliver session hooks. Never infer death merely because another session starts.
 
@@ -49,6 +49,8 @@ Record the actual approved scope once with `authorize F01 "<user instruction>"`.
 - Dynamic ownership targets in supported adapters remain conservative failures requiring investigation; do not silently treat an unprovable ownership boundary as safe.
 
 Hooks and Git diffs are guardrails, not a security sandbox. Use host permissions for network, credentials and destructive operations. Verification commands time out after 120 seconds by default (`HARNESS_COMMAND_TIMEOUT_MS` overrides); server commands need explicit readiness and process-tree cleanup wrappers, since shell timeout alone is not a full process supervisor. Keep one orchestrator for each queue; parallel workers have separate leased worktrees.
+
+Documentation upkeep is a single change-driven pass at stage completion; see WORKFLOW.md. It creates no extra report or approval gate.
 
 ## Development
 

@@ -1,6 +1,6 @@
 {
   "name": "harness",
-  "version": "3.0.0",
+  "version": "3.0.3",
   "description": "Scoped planning, isolated feature execution, and evidence-based verification.",
   "author": {
     "name": "beastgummy0321-stack"

@@ -53,7 +53,7 @@ async function help() {
   merge <id>           merge the issue branch into the feature branch, integration checker, smoke in the worktree, → done/
   block <id> "<reason>"     doing/ → blocked/ with reason; worktree discarded
   diff <id> [--stat]   diff of the issue branch against its base (reviewers: --stat first, then read the files)
-  integrate feature <F01>   checker · project test/build · feature verify · smoke · runtime acceptance; lists human items
+  integrate feature <F01> [--resume]   checker · project test/build · feature verify · smoke · runtime acceptance; lists human items
   close feature <F01> [--human-approved]  delete done issues + feature file, merge the feature branch into its base, clean up`);
 }
 
@@ -260,10 +260,11 @@ async function block(id, ...reason) {
   out(JSON.stringify(Q.blockIssue(p, id, reason.join(' ') || 'blocked by orchestrator'), null, 2));
 }
 async function diff(id, flag) { out(Q.diff(project(), id || die('diff <id> [--stat]'), flag === '--stat')); }
-async function integrate(kind, id) {
+async function integrate(kind, id, flag) {
+  if (flag && flag !== "--resume") die("integrate feature <F01> [--resume]");
   const p = project();
   if (kind !== 'feature') die('integrate feature <F01>');
-  const r = Q.integrateFeature(p, id || die('integrate feature <F01>'));
+  const r = Q.integrateFeature(p, id || die('integrate feature <F01>'), { resume: flag === '--resume' });
   out(JSON.stringify(r, null, 2));
   if (!r.ok) process.exit(1);
 }

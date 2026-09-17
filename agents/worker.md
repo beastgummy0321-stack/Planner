@@ -14,3 +14,5 @@ Implement and repair within scope. Use the existing test/dev/preview tools for r
 Run targeted checks during development as needed; finish performs final issue gates, so an unchanged full suite need not also be run manually. A repairable failure keeps this worktree; correct the cause and rerun affected checks. Repeated failure with no new evidence is a blocker.
 
 Report changed files, observed verification results and unresolved issues concisely. Do not claim a command ran merely because finish will run it later.
+
+Update affected documentation only inside the issue’s touch scope. Report necessary out-of-scope documentation corrections to the orchestrator, which performs the shared Stage closeout once; do not create a second closeout report.

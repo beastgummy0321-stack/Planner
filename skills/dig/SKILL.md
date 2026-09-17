@@ -4,6 +4,7 @@ description: Clarify a direction when the user requests discussion or unresolved
 ---
 
 # Dig
+For persistent outputs, use only the Stage closeout section of [the shared contract](../../WORKFLOW.md); no queue is implied.
 Discuss without initializing a queue or requiring Git. Use existing discovery/status only to recover relevant prior decisions.
 
 Identify the intended outcome, material constraints and next costly-to-reverse choice. Ask only questions whose answers change the next step or avoid substantial rework; include a recommendation. Research answerable facts yourself. Treat "you decide" or "whatever works" as discretion for reasonable reversible choices, and distinguish your assumptions from user decisions.
