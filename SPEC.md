@@ -17,6 +17,10 @@ Authorization is explicit and scoped, never inferred from message timestamps. Ma
 - Final integration receipts bind code, feature/architecture content and issue state. Required human acceptance is recorded explicitly at close. Local closure is automatic only inside existing authorization.
 
 ## Verification
+
+Optional `verify.issue_profiles` narrows only finish-time project typecheck/build: each profile has project-relative `only` globs and optional command overrides (explicit `null` skips that slot). Every changed non-prose file must match one profile; interface-change issues and unmatched changes use the full defaults. Issue tests, checker, scope gates and merge smoke are never skipped by profiles. Final feature integration always uses full project commands. `verify.typecheck_before_test` may omit a test subset already included in `verify.test`, only during full integration; it requires both typecheck and test and has its own command-bound checkpoint.
+
+Session status expands bounded Outcome/Decisions only for a feature on the current branch or with active leases; other open features retain queue/closure summaries and conditional file pointers. Worker attach still carries the complete applicable contract.
 Run the cheapest effective checks, deduplicate identical commands within a gate, and retain integration checks where combining changes creates new risk. Passed checks are not repeated merely because a stage name changed. Runtime commands terminate and have bounded execution; service lifecycle belongs in a readiness-and-cleanup wrapper. Tests use temporary repositories; host-level behavior still needs native validation.
 
 `verify.smoke_after_build` optionally runs the same smoke coverage without rebuilding, only during integration after a successful `verify.build` in the same checkout. It requires both `build` and the standalone `smoke` fallback. Merge always uses standalone smoke. Integration runs typecheck → build → full test → feature extras → smoke → runtime extras. Identical checker/verify commands are deduplicated; shell equivalence is not guessed.

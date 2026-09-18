@@ -1,7 +1,7 @@
 {
   "name": "harness",
   "version": "3.0.3",
-  "description": "Scoped planning, isolated feature execution, and evidence-based verification.",
+  "description": "Plan and execute feature queues when isolation, dependencies or resumption warrant them; ordinary questions, read-only reviews and small local fixes use the direct path.",
   "author": {
     "name": "beastgummy0321-stack"
   },
@@ -15,6 +15,6 @@
       "Write"
     ],
     "longDescription": "Proportionate planning and isolated execution with explicit scope, recoverable work, and evidence-based verification.",
-    "defaultPrompt": "Use the smallest Planner workflow appropriate to my task, preserve existing authorization boundaries, and verify the requested outcome."
+    "defaultPrompt": "Use a feature queue only when isolation, dependencies or resumption justify it. Reuse approved plans and authorization, read only relevant context, and verify the requested outcome."
   }
 }
